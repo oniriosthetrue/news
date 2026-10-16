@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from . import models  # noqa: F401  — enregistre les tables sur Base.metadata
 from .config import get_settings
 from .db import Base, engine
-from .routers import auth, news, themes
+from .routers import auth, news, themes, usage
 from .scheduler import shutdown_scheduler, start_scheduler
 
 settings = get_settings()
@@ -66,6 +66,7 @@ app.add_middleware(
 app.include_router(auth.router, prefix="/api")
 app.include_router(themes.router, prefix="/api")
 app.include_router(news.router, prefix="/api")
+app.include_router(usage.router, prefix="/api")
 
 
 @app.get("/api/health", tags=["health"])

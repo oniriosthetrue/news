@@ -33,6 +33,30 @@ def enabled() -> bool:
     return bool(settings.serper_api_key)
 
 
+async def get_balance(client: httpx.AsyncClient) -> Optional[dict[str, Any]]:
+    """Solde de credits Serper restant (endpoint /account). None si indisponible.
+
+    Retourne ex. {"balance": 2483, "rateLimit": 5}. Les credits Serper sont un
+    stock unique (non renouvelable) : 1 recherche = 1 credit.
+    """
+    if not settings.serper_api_key:
+        return None
+    account_url = settings.serper_url.rsplit("/", 1)[0] + "/account"
+    try:
+        resp = await client.get(
+            account_url,
+            headers={"X-API-KEY": settings.serper_api_key},
+            timeout=settings.serper_timeout,
+        )
+        if resp.status_code != 200:
+            logger.warning("Serper /account %s", resp.status_code)
+            return None
+        return resp.json()
+    except (httpx.HTTPError, ValueError) as exc:
+        logger.warning("Serper /account erreur: %s", exc)
+        return None
+
+
 async def search(
     client: httpx.AsyncClient,
     query: str,
