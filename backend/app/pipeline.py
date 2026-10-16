@@ -22,7 +22,7 @@ from typing import Optional
 from urllib.parse import urlsplit
 
 import httpx
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from .config import get_settings
@@ -180,6 +180,44 @@ def _existing_hashes(db: Session, urls: list[str]) -> set[str]:
     return set(rows)
 
 
+async def _backfill_empty_content(
+    client: httpx.AsyncClient, db: Session, theme_id: int
+) -> int:
+    """Re-scrape les articles du thème dont le texte est vide.
+
+    Un article est dédupliqué par URL : une URL déjà en base n'est plus jamais
+    re-scrapée. Si son scraping avait échoué au 1er scan (site momentanément
+    injoignable, anti-bot, etc.), son texte resterait vide à jamais. Cette passe
+    rattrape ces cas : elle ne coûte que sur les articles déjà présents sans
+    texte (borné), et se déclenche à chaque scan -> réparation automatique.
+    """
+    empty = db.scalars(
+        select(Article)
+        .join(Cluster, Article.cluster_id == Cluster.id)
+        .where(Cluster.theme_id == theme_id, func.length(Article.content) < 50)
+    ).all()
+    if not empty:
+        return 0
+    sem = asyncio.Semaphore(settings.llm_concurrency + 2)
+
+    async def one(article: Article) -> int:
+        async with sem:
+            scraped = await scrape.scrape(client, article.url)
+        if scraped and len(scraped.content) >= 50:
+            article.content = scraped.content
+            if not article.title and scraped.title:
+                article.title = scraped.title[:500]
+            return 1
+        return 0
+
+    results = await asyncio.gather(*(one(a) for a in empty))
+    filled = sum(results)
+    if filled:
+        db.commit()
+        logger.info("Backfill thème %s : %d textes récupérés", theme_id, filled)
+    return filled
+
+
 async def _scrape_new(
     client: httpx.AsyncClient, candidates: list[dict]
 ) -> list[dict]:
@@ -269,6 +307,9 @@ async def scan_theme(db: Session, theme_id: int) -> dict:
         raise ValueError(f"Thème {theme_id} introuvable")
 
     async with httpx.AsyncClient() as client:
+        # Rattrape les articles déjà connus dont le texte n'avait pas pu être
+        # scrapé au 1er passage (dédup par URL -> jamais re-scrapé sinon).
+        await _backfill_empty_content(client, db, theme_id)
         queries = await _ensure_queries(client, db, theme)
         bucket = _searxng_bucket(theme.lookback_hours)
         candidates = await _gather_candidates(client, queries, time_range=bucket)
