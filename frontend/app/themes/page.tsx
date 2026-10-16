@@ -16,6 +16,9 @@ export default function ThemesPage() {
   const [interval, setIntervalH] = useState(6);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Brouillon d'intervalle par thème (id -> valeur en cours d'édition).
+  const [drafts, setDrafts] = useState<Record<number, number>>({});
+  const [savingId, setSavingId] = useState<number | null>(null);
 
   useEffect(() => {
     if (!loading && !user) router.replace("/login");
@@ -57,6 +60,24 @@ export default function ThemesPage() {
   async function toggle(t: Theme) {
     await api.updateTheme(t.id, { is_active: !t.is_active });
     refresh();
+  }
+
+  async function saveInterval(t: Theme) {
+    const value = drafts[t.id];
+    if (value == null || value === t.scan_interval_hours || value < 1 || value > 168)
+      return;
+    setSavingId(t.id);
+    try {
+      await api.updateTheme(t.id, { scan_interval_hours: value });
+      setDrafts((d) => {
+        const next = { ...d };
+        delete next[t.id];
+        return next;
+      });
+      refresh();
+    } finally {
+      setSavingId(null);
+    }
   }
 
   if (loading) return null;
@@ -133,11 +154,36 @@ export default function ThemesPage() {
                   <p className="truncate text-sm text-neutral-500">{t.description}</p>
                 )}
                 <p className="mt-1 text-xs text-neutral-400">
-                  Toutes les {t.scan_interval_hours}h ·{" "}
                   {t.last_scanned_at
                     ? `scan ${new Date(t.last_scanned_at).toLocaleString("fr-FR")}`
                     : "jamais scanné"}
                 </p>
+                <div className="mt-2 flex items-center gap-2 text-xs text-neutral-500">
+                  <label>Actualisation toutes</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={168}
+                    className="w-16 rounded-md border border-neutral-300 bg-transparent px-2 py-1 text-sm dark:border-neutral-700"
+                    value={drafts[t.id] ?? t.scan_interval_hours}
+                    onChange={(e) =>
+                      setDrafts((d) => ({
+                        ...d,
+                        [t.id]: Math.max(1, Math.min(168, Number(e.target.value) || 1)),
+                      }))
+                    }
+                  />
+                  <span>h</span>
+                  {(drafts[t.id] ?? t.scan_interval_hours) !== t.scan_interval_hours && (
+                    <button
+                      onClick={() => saveInterval(t)}
+                      disabled={savingId === t.id}
+                      className="rounded-md bg-sky-600 px-2 py-1 text-xs font-semibold text-white hover:bg-sky-700 disabled:opacity-50"
+                    >
+                      {savingId === t.id ? "…" : "Enregistrer"}
+                    </button>
+                  )}
+                </div>
               </div>
               <div className="flex flex-shrink-0 gap-2 text-sm">
                 <button
