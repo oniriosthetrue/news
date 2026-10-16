@@ -6,6 +6,8 @@ et repousse l'instantané -> le thème et ses articles apparaissent au fil.
 """
 from __future__ import annotations
 
+import datetime as dt
+
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy import select
@@ -56,8 +58,16 @@ async def create_theme(
         }
         async with httpx.AsyncClient() as client:
             await send_theme_command(client, command)
-        # Le boîtier repousse l'instantané (avec le nouveau thème) en arrière-plan
-        # après son scan. On renvoie un objet éphémère pour satisfaire le schéma.
+        # Le boîtier a repoussé l'instantané (avec le nouveau thème) de façon
+        # synchrone avant de répondre -> il est déjà présent dans la base miroir.
+        created = db.scalars(
+            select(Theme)
+            .where(Theme.user_id == user.id, Theme.name == payload.name)
+            .order_by(Theme.created_at.desc())
+        ).first()
+        if created is not None:
+            return created
+        # Repli (course) : objet éphémère pour satisfaire le schéma de réponse.
         return Theme(
             id=0,
             user_id=user.id,
@@ -66,6 +76,7 @@ async def create_theme(
             scan_interval_hours=payload.scan_interval_hours,
             lookback_hours=payload.lookback_hours,
             is_active=True,
+            created_at=dt.datetime.now(dt.timezone.utc),
         )
     theme = Theme(
         user_id=user.id,
