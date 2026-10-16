@@ -12,9 +12,30 @@ function timeAgo(iso: string): string {
   return `il y a ${days} j`;
 }
 
+// Date courte lisible (ex. « 14 oct. » ou « 14 oct. 2025 » si autre année).
+function shortDate(iso: string): string {
+  const d = new Date(iso);
+  const sameYear = d.getFullYear() === new Date().getFullYear();
+  return d.toLocaleDateString("fr-FR", {
+    day: "numeric",
+    month: "short",
+    ...(sameYear ? {} : { year: "numeric" }),
+  });
+}
+
+// Date de parution la plus recente parmi les articles du cluster.
+function newestPublished(cluster: Cluster): string | null {
+  const dates = cluster.articles
+    .map((a) => a.published_at)
+    .filter((d): d is string => Boolean(d))
+    .sort();
+  return dates.length ? dates[dates.length - 1] : null;
+}
+
 export default function ClusterCard({ cluster }: { cluster: Cluster }) {
   const lead = cluster.articles[0];
   const extra = cluster.articles.slice(1);
+  const published = newestPublished(cluster);
 
   return (
     <article className="overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
@@ -38,7 +59,13 @@ export default function ClusterCard({ cluster }: { cluster: Cluster }) {
           </p>
           <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-neutral-500">
             {lead && <span className="font-medium text-sky-600">{lead.source}</span>}
-            <span>{timeAgo(cluster.created_at)}</span>
+            {published ? (
+              <span title={new Date(published).toLocaleString("fr-FR")}>
+                {timeAgo(published)} · {shortDate(published)}
+              </span>
+            ) : (
+              <span>{timeAgo(cluster.created_at)}</span>
+            )}
             <span>{cluster.articles.length} source{cluster.articles.length > 1 ? "s" : ""}</span>
           </div>
         </div>
@@ -58,6 +85,11 @@ export default function ClusterCard({ cluster }: { cluster: Cluster }) {
               >
                 {a.title}
               </a>
+              {a.published_at && (
+                <span className="ml-auto flex-shrink-0 text-xs text-neutral-400">
+                  {shortDate(a.published_at)}
+                </span>
+              )}
             </li>
           ))}
         </ul>
