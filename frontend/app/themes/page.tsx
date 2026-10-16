@@ -5,7 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import Navbar from "@/components/Navbar";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import type { Theme } from "@/lib/types";
+import type { Theme, Usage } from "@/lib/types";
 
 export default function ThemesPage() {
   const { user, loading } = useAuth();
@@ -25,6 +25,11 @@ export default function ThemesPage() {
   // Thème dont le scan est en cours (null = aucun). Le scan tourne en
   // arrière-plan côté serveur ; on affiche l'état jusqu'à ce qu'il ait fini.
   const [scanningId, setScanningId] = useState<number | null>(null);
+  // État du moteur (LLM on/off) : sert à avertir que les thèmes en attente ne
+  // se rempliront qu'au retour du LLM.
+  const [usage, setUsage] = useState<Usage | null>(null);
+  // Message d'information non bloquant (ex. après création LLM off).
+  const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
     if (!loading && !user) router.replace("/login");
@@ -37,6 +42,31 @@ export default function ThemesPage() {
 
   useEffect(refresh, [refresh]);
 
+  // Un thème « en attente » = jamais scanné (aucun article). Il se remplira
+  // dès que le LLM sera joignable (l'ordonnanceur le retente à chaque tick).
+  const hasPending = themes.some((t) => t.last_scanned_at == null);
+
+  // État du moteur au montage + périodiquement (le LLM peut revenir).
+  useEffect(() => {
+    if (!user) return;
+    let alive = true;
+    const poll = () => api.usage().then((u) => alive && setUsage(u)).catch(() => {});
+    poll();
+    const id = setInterval(poll, 30000);
+    return () => {
+      alive = false;
+      clearInterval(id);
+    };
+  }, [user]);
+
+  // Rafraîchissement continu tant qu'un thème est en attente : il se dégrise
+  // de lui-même dès que le scan réussit (LLM revenu), sans rechargement manuel.
+  useEffect(() => {
+    if (!hasPending) return;
+    const id = setInterval(refresh, 15000);
+    return () => clearInterval(id);
+  }, [hasPending, refresh]);
+
   async function create(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
@@ -46,6 +76,11 @@ export default function ThemesPage() {
       setName("");
       setDescription("");
       refresh();
+      setNotice(
+        usage && !usage.llm_online
+          ? "Thème créé. Le LLM est indisponible : le fil se remplira automatiquement dès son retour."
+          : "Thème créé. Le fil se remplit, ça peut prendre une minute.",
+      );
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erreur");
     } finally {
@@ -139,6 +174,25 @@ export default function ThemesPage() {
       <main className="mx-auto max-w-3xl px-4 py-6">
         <h1 className="mb-4 text-xl font-bold">Mes thèmes</h1>
 
+        {usage && !usage.llm_online && (
+          <div className="mb-4 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
+            LLM indisponible : les thèmes en attente (grisés) seront alimentés
+            automatiquement dès son retour. Aucune action requise.
+          </div>
+        )}
+        {notice && (
+          <div className="mb-4 flex items-center justify-between gap-3 rounded-lg border border-sky-300 bg-sky-50 px-4 py-3 text-sm text-sky-800 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-200">
+            <span>{notice}</span>
+            <button
+              onClick={() => setNotice(null)}
+              className="text-sky-500 hover:text-sky-700"
+              aria-label="Fermer"
+            >
+              ✕
+            </button>
+          </div>
+        )}
+
         <form
           onSubmit={create}
           className="mb-6 space-y-3 rounded-xl border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900"
@@ -192,10 +246,15 @@ export default function ThemesPage() {
           {themes.length === 0 && (
             <p className="text-sm text-neutral-500">Aucun thème. Créez-en un ci-dessus.</p>
           )}
-          {themes.map((t) => (
+          {themes.map((t) => {
+            const pending = t.last_scanned_at == null;
+            return (
             <div
               key={t.id}
-              className="flex items-center justify-between rounded-xl border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900"
+              className={
+                "flex items-center justify-between rounded-xl border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900" +
+                (pending ? " opacity-60 grayscale" : "")
+              }
             >
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
@@ -210,6 +269,11 @@ export default function ThemesPage() {
                   >
                     {t.is_active ? "actif" : "inactif"}
                   </span>
+                  {pending && (
+                    <span className="rounded bg-amber-100 px-1.5 py-0.5 text-xs text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
+                      en attente du LLM
+                    </span>
+                  )}
                 </div>
                 {t.description && (
                   <p className="truncate text-sm text-neutral-500">{t.description}</p>
@@ -303,7 +367,8 @@ export default function ThemesPage() {
                 </button>
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       </main>
     </>

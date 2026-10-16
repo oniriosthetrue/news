@@ -18,6 +18,7 @@ from .config import get_settings
 from .db import SessionLocal
 from .models import Theme
 from .pipeline import scan_theme
+from .clients import llm
 from . import sync as sync_module
 
 logger = logging.getLogger(__name__)
@@ -45,6 +46,14 @@ def _run_scan(theme_id: int) -> None:
         # Le scan a produit du nouveau contenu : on le pousse au miroir VPS.
         if settings.sync_enabled:
             push_to_vps()
+    except llm.LLMError:
+        # LLM injoignable (extrapolation ou résumé) : le thème reste « en
+        # attente » (last_scanned_at non mis). Le tick le reprogrammera et il
+        # se remplira dès le retour du LLM. Simple warning, pas de traceback.
+        logger.warning(
+            "Scan thème %s reporté : LLM indisponible (nouvel essai au prochain tick)",
+            theme_id,
+        )
     except Exception:  # noqa: BLE001 — un job ne doit jamais tuer l'ordonnanceur
         logger.exception("Échec du scan du thème %s", theme_id)
     finally:
