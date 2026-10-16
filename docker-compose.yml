@@ -49,6 +49,9 @@ services:
       LITELLM_API_KEY: ${LITELLM_MASTER_KEY:?set LITELLM_MASTER_KEY in .env}
       LITELLM_MODEL: ${LITELLM_MODEL:-IA}
       # SearXNG (méta-moteur existant) — réseau mynetwork, format JSON activé.
+      # DÉSACTIVÉ pour les news : l'instance est partagée avec OpenWebUI (même IP
+      # -> quota commun -> suspensions). false -> recherche via API à clé uniquement.
+      SEARXNG_ENABLED: "false"
       SEARXNG_URL: http://searxng:8080/search
       SEARXNG_LANGUAGE: fr-FR
       SEARXNG_TIME_RANGE: day

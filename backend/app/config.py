@@ -23,6 +23,9 @@ class Settings(BaseSettings):
     litellm_model: str = "IA"
 
     # --- SearXNG (méta-moteur existant) ---
+    # Désactivable : l'instance est partagée avec OpenWebUI (même IP -> quota
+    # commun -> suspensions). false -> la news passe directement aux API à clé.
+    searxng_enabled: bool = True
     searxng_url: str = "http://searxng:8080/search"
     searxng_language: str = "fr-FR"
     searxng_time_range: str = "day"

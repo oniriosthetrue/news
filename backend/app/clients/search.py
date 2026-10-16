@@ -12,11 +12,13 @@ from typing import Any, Optional
 
 import httpx
 
+from ..config import get_settings
 from . import gnews, newsapi, searxng, serper
 
 logger = logging.getLogger(__name__)
+settings = get_settings()
 
-# Replis ordonnés : (nom, module). Appelés seulement si SearXNG revient vide.
+# Replis ordonnés : (nom, module). Appelés si SearXNG désactivé ou revient vide.
 _FALLBACKS = (("NewsAPI", newsapi), ("GNews", gnews), ("Serper", serper))
 
 
@@ -27,16 +29,18 @@ async def search(
     max_results: int = 15,
     time_range: Optional[str] = None,
 ) -> list[dict[str, Any]]:
-    results = await searxng.search(
-        client, query, max_results=max_results, time_range=time_range
-    )
-    if results:
-        return results
+    # SearXNG d'abord, sauf si désactivé (instance partagée -> quota saturé).
+    if settings.searxng_enabled:
+        results = await searxng.search(
+            client, query, max_results=max_results, time_range=time_range
+        )
+        if results:
+            return results
 
     for name, mod in _FALLBACKS:
         if not mod.enabled():
             continue
-        logger.info("SearXNG vide pour %r -> repli %s", query, name)
+        logger.info("SearXNG indisponible pour %r -> repli %s", query, name)
         results = await mod.search(
             client, query, max_results=max_results, time_range=time_range
         )
