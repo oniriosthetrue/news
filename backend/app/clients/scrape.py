@@ -29,7 +29,7 @@ class ScrapedArticle:
 
 
 def _extract(html: str, url: str) -> Optional[ScrapedArticle]:
-    meta = trafilatura.extract_metadata(html, url=url)
+    meta = trafilatura.extract_metadata(html, default_url=url)
     content = trafilatura.extract(
         html, url=url, include_comments=False, favor_recall=True
     )
