@@ -49,7 +49,7 @@ class Settings(BaseSettings):
 
     # --- Pipeline ---
     scan_default_interval_hours: int = 6
-    max_queries_per_theme: int = 12
+    max_queries_per_theme: int = 16
     max_results_per_query: int = 25
     max_articles_per_scan: int = 120
     # Nombre max de clusters (sujets regroupe) retenus par scan = nb d'appels

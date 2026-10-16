@@ -63,7 +63,7 @@ services:
       SERPER_API_KEY: ${SERPER_API_KEY:-}
       # Réglages pipeline.
       SCAN_DEFAULT_INTERVAL_HOURS: "6"
-      MAX_QUERIES_PER_THEME: "12"
+      MAX_QUERIES_PER_THEME: "16"
       MAX_RESULTS_PER_QUERY: "25"
       MAX_ARTICLES_PER_SCAN: "120"
       MAX_CLUSTERS_PER_SCAN: "40"
