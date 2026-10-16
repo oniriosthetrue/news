@@ -95,6 +95,32 @@ def _effective_date(item: dict) -> Optional[dt.datetime]:
     )
 
 
+async def _probe_headlines(
+    client: httpx.AsyncClient, theme_name: str, limit: int = 20
+) -> Optional[str]:
+    """Recherche web rapide sur le theme -> titres reels, utilises comme ancrage
+    pour l'extraction de requetes. None si rien trouve (on retombe alors sur
+    l'extraction sans ancrage)."""
+    try:
+        results = await search_client.search(
+            client, theme_name, max_results=limit, time_range="week"
+        )
+    except Exception as exc:  # l'amorcage est optionnel : ne doit jamais bloquer
+        logger.warning("Amorcage recherche echoue pour %r: %s", theme_name, exc)
+        return None
+    titles = [
+        (r.get("title") or "").strip()
+        for r in results
+        if (r.get("title") or "").strip()
+    ]
+    # Dédup en préservant l'ordre, borne la taille du contexte.
+    seen: set[str] = set()
+    uniq = [t for t in titles if not (t.lower() in seen or seen.add(t.lower()))]
+    if not uniq:
+        return None
+    return "\n".join(f"- {t}" for t in uniq[:limit])
+
+
 async def _ensure_queries(
     client: httpx.AsyncClient, db: Session, theme: Theme
 ) -> list[str]:
@@ -102,8 +128,13 @@ async def _ensure_queries(
     existing = db.scalars(select(Query.text).where(Query.theme_id == theme.id)).all()
     if existing:
         return list(existing)
+    # Amorcage : une recherche web rapide sur le theme pour ANCRER l'extraction
+    # dans l'actualité reelle (acteurs/sous-sujets cites par les vrais articles)
+    # au lieu de la connaissance d'entrainement du LLM (qui peut etre perimee).
+    context = await _probe_headlines(client, theme.name)
     queries = await llm.extrapolate_queries(
-        client, theme.name, theme.description, settings.max_queries_per_theme
+        client, theme.name, theme.description, settings.max_queries_per_theme,
+        context=context,
     )
     # Le nom du theme est toujours interroge en brut (c'est la requete la plus
     # large, celle qu'un lecteur taperait) : les variantes extrapolees seules

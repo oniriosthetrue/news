@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 import logging
 import re
-from typing import Any
+from typing import Any, Optional
 
 import httpx
 
@@ -76,9 +76,18 @@ def _extract_json(text: str) -> Any:
 
 
 async def extrapolate_queries(
-    client: httpx.AsyncClient, theme_name: str, description: str, max_queries: int
+    client: httpx.AsyncClient,
+    theme_name: str,
+    description: str,
+    max_queries: int,
+    context: Optional[str] = None,
 ) -> list[str]:
-    """Thème -> liste de requêtes de recherche élargies (synonymes, entités, sous-sujets)."""
+    """Thème -> liste de requêtes de recherche élargies (synonymes, entités, sous-sujets).
+
+    Si `context` est fourni (titres d'articles réellement trouvés sur le web),
+    le LLM s'y ANCRE pour extraire les acteurs/sous-sujets d'actualité au lieu
+    de puiser dans sa connaissance d'entraînement (qui peut etre perimee).
+    """
     system = (
         "Tu élargis un thème d'actualité en requêtes de recherche web variées et "
         "complémentaires, destinées à couvrir un MAXIMUM d'articles de presse. "
@@ -88,12 +97,21 @@ async def extrapolate_queries(
         "(4) les réactions, débats et controverses. Ne te limite PAS aux aspects "
         "techniques ou chiffrés : prévois des requêtes « grand public » et "
         "politiques telles qu'un lecteur les taperait. "
+        "Quand des titres d'articles réels sont fournis, PRIORISE les acteurs, "
+        "entités et angles qu'ils mentionnent explicitement. "
         "Réponds UNIQUEMENT par un tableau JSON de chaînes, sans texte autour."
     )
     user = (
         f"Thème : {theme_name}\n"
         f"Description : {description or '(aucune)'}\n"
-        f"Produis au plus {max_queries} requêtes de recherche en français, courtes, "
+    )
+    if context:
+        user += (
+            f"\nTitres d'articles récents trouvés sur ce thème (source d'ancrage) :\n"
+            f"{context}\n"
+        )
+    user += (
+        f"\nProduis au plus {max_queries} requêtes de recherche en français, courtes, "
         f"spécifiques et non redondantes, couvrant les angles ci-dessus. "
         f"Format : [\"...\", \"...\"]"
     )
