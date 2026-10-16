@@ -81,14 +81,21 @@ async def extrapolate_queries(
     """Thème -> liste de requêtes de recherche élargies (synonymes, entités, sous-sujets)."""
     system = (
         "Tu élargis un thème d'actualité en requêtes de recherche web variées et "
-        "complémentaires (synonymes, entités, sous-sujets, angles différents). "
+        "complémentaires, destinées à couvrir un MAXIMUM d'articles de presse. "
+        "Mélange obligatoirement les angles : (1) le sujet central et ses synonymes, "
+        "(2) l'actualité récente et les derniers développements, (3) les acteurs "
+        "cités dans les journaux (personnalités, partis, institutions, entreprises), "
+        "(4) les réactions, débats et controverses. Ne te limite PAS aux aspects "
+        "techniques ou chiffrés : prévois des requêtes « grand public » et "
+        "politiques telles qu'un lecteur les taperait. "
         "Réponds UNIQUEMENT par un tableau JSON de chaînes, sans texte autour."
     )
     user = (
         f"Thème : {theme_name}\n"
         f"Description : {description or '(aucune)'}\n"
         f"Produis au plus {max_queries} requêtes de recherche en français, courtes, "
-        f"spécifiques et non redondantes. Format : [\"...\", \"...\"]"
+        f"spécifiques et non redondantes, couvrant les angles ci-dessus. "
+        f"Format : [\"...\", \"...\"]"
     )
     raw = await _chat(client, [{"role": "system", "content": system},
                                {"role": "user", "content": user}], temperature=0.6)

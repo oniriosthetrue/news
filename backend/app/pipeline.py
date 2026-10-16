@@ -98,17 +98,23 @@ def _effective_date(item: dict) -> Optional[dt.datetime]:
 async def _ensure_queries(
     client: httpx.AsyncClient, db: Session, theme: Theme
 ) -> list[str]:
-    """Retourne les requêtes du thème ; les extrapole via LLM si absentes."""
+    """Retourne les requetes du theme ; les extrapole via LLM si absentes."""
     existing = db.scalars(select(Query.text).where(Query.theme_id == theme.id)).all()
     if existing:
         return list(existing)
     queries = await llm.extrapolate_queries(
         client, theme.name, theme.description, settings.max_queries_per_theme
     )
+    # Le nom du theme est toujours interroge en brut (c'est la requete la plus
+    # large, celle qu'un lecteur taperait) : les variantes extrapolees seules
+    # laissent passer des articles du sujet central.
+    base = theme.name.strip()
+    if base and base.lower() not in {q.lower() for q in queries}:
+        queries.insert(0, base)
     for q in queries:
         db.add(Query(theme_id=theme.id, text=q))
     db.commit()
-    logger.info("Thème %s : %d requêtes extrapolées", theme.id, len(queries))
+    logger.info("Theme %s : %d requetes extrapolees", theme.id, len(queries))
     return queries
 
 
