@@ -129,3 +129,28 @@ class Cluster(Base):
 
     theme: Mapped[Theme] = relationship(back_populates="clusters")
     articles: Mapped[list[Article]] = relationship(back_populates="cluster")
+
+
+class EngineStatus(Base):
+    """État du moteur (boîtier) tel que poussé dans le dernier instantané.
+
+    Le miroir VPS n'a pas de LiteLLM : il ne peut pas sonder le LLM lui-même.
+    Le boîtier inclut donc son état (LLM joignable, solde Serper) dans l'instantané ;
+    on le stocke ici pour que /api/usage du miroir affiche le VRAI état du moteur.
+    Ligne unique (id=1).
+    """
+
+    __tablename__ = "engine_status"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    llm_online: Mapped[bool] = mapped_column(Boolean, default=False)
+    serper_balance: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # Sources actives côté boîtier (JSON simple : {"serper": true, ...}).
+    enabled_sources: Mapped[str] = mapped_column(Text, default="{}")
+    # Date de génération de l'instantané (UTC) = fraîcheur de l'état.
+    snapshot_at: Mapped[Optional[dt.datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    received_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )

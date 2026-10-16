@@ -56,12 +56,36 @@ def push_to_vps() -> bool:
     if not settings.sync_enabled:
         return False
     try:
+        engine = asyncio.run(_engine_status())
         with SessionLocal() as db:
-            snapshot = sync_module.build_snapshot(db)
+            snapshot = sync_module.build_snapshot(db, engine_status=engine)
         return asyncio.run(_push_async(snapshot))
     except Exception:  # noqa: BLE001 — la sync ne doit jamais tuer l'ordonnanceur
         logger.exception("Échec du push vers le VPS")
         return False
+
+
+async def _engine_status() -> dict:
+    """État du moteur (boîtier) à embarquer dans l'instantané pour le miroir.
+
+    Le miroir n'a pas de LiteLLM : il affiche cet état pour son badge LLM/credits.
+    """
+    import httpx
+
+    from .clients import gnews, llm, newsapi, serper
+
+    async with httpx.AsyncClient() as client:
+        llm_online = await llm.online(client)
+        balance = await serper.get_balance(client) if serper.enabled() else None
+    return {
+        "llm_online": llm_online,
+        "serper_balance": (balance or {}).get("balance"),
+        "enabled": {
+            "serper": serper.enabled(),
+            "newsapi": newsapi.enabled(),
+            "gnews": gnews.enabled(),
+        },
+    }
 
 
 async def _push_async(snapshot: dict) -> bool:

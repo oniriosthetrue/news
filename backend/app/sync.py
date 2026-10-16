@@ -26,7 +26,7 @@ from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
 from .config import get_settings
-from .models import Article, Cluster, Theme, User
+from .models import Article, Cluster, EngineStatus, Theme, User
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -39,17 +39,23 @@ def _iso(value: Optional[dt.datetime]) -> Optional[str]:
 # --------------------------------------------------------------------------- #
 # Construction de l'instantané (côté boîtier)
 # --------------------------------------------------------------------------- #
-def build_snapshot(db: Session) -> dict[str, Any]:
+def build_snapshot(
+    db: Session, engine_status: Optional[dict[str, Any]] = None
+) -> dict[str, Any]:
     """Sérialise toutes les données visibles en un dict JSON-compatible.
 
     On n'inclut PAS `content` (corps des articles) : inutile à l'affichage du
     fil et lourd à transférer. On garde titre, résumé, source, URL, image, dates.
+
+    `engine_status` (optionnel) : état du moteur calculé par le boîtier
+    ({"llm_online": bool, "serper_balance": int|None, "enabled": {...}}). Le
+    miroir ne peut pas sonder son propre LLM (il n'en a pas) : il affiche celui-ci.
     """
     users = db.scalars(select(User)).all()
     themes = db.scalars(select(Theme)).all()
     clusters = db.scalars(select(Cluster)).all()
 
-    return {
+    snap: dict[str, Any] = {
         "generated_at": _iso(dt.datetime.now(dt.timezone.utc)),
         "users": [
             {
@@ -102,6 +108,9 @@ def build_snapshot(db: Session) -> dict[str, Any]:
             for c in clusters
         ],
     }
+    if engine_status is not None:
+        snap["engine_status"] = engine_status
+    return snap
 
 
 def sign(secret: str, body: bytes) -> str:
@@ -167,6 +176,7 @@ def import_snapshot(db: Session, snapshot: dict[str, Any]) -> dict[str, int]:
     users = snapshot.get("users", [])
     themes = snapshot.get("themes", [])
     clusters = snapshot.get("clusters", [])
+    engine = snapshot.get("engine_status")
 
     # Purge dans l'ordre (les FK en cascade prennent le relais, mais on est explicite).
     db.execute(text("DELETE FROM articles"))
@@ -221,6 +231,18 @@ def import_snapshot(db: Session, snapshot: dict[str, Any]) -> dict[str, int]:
             )
             n_articles += 1
         db.add(cluster)
+
+    # Etat du moteur poussé par le boîtier (ligne unique id=1) -> /api/usage miroir.
+    if engine is not None:
+        import json as _json
+
+        status = db.get(EngineStatus, 1) or EngineStatus(id=1)
+        status.llm_online = bool(engine.get("llm_online", False))
+        bal = engine.get("serper_balance")
+        status.serper_balance = int(bal) if isinstance(bal, (int, float)) else None
+        status.enabled_sources = _json.dumps(engine.get("enabled", {}))
+        status.snapshot_at = _parse_dt(snapshot.get("generated_at"))
+        db.merge(status)
 
     db.commit()
 
