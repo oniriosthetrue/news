@@ -53,6 +53,11 @@ services:
       MIRROR_MODE: "true"
       SYNC_SHARED_SECRET: ${SYNC_SHARED_SECRET:?set SYNC_SHARED_SECRET (same as boitier)}
       SYNC_ENABLED: "false"  # le miroir ne pousse pas, il reçoit
+      # --- Probe LLM temps réel (VPS -> boîtier) pour le badge « LLM on/off --
+      # Le miroir sonde le boîtier en direct via son IP NetBird + en-tête Host
+      # (routage Traefik). Vide -> retombe sur le dernier état poussé.
+      ENGINE_PROBE_URL: ${ENGINE_PROBE_URL:-http://100.73.55.66/api/sync/engine-status}
+      ENGINE_PROBE_HOST: ${ENGINE_PROBE_HOST:-news.minervia.fr}
     networks: [newsnet]
     # Caddy (systemd) sur le VPS reverse-proxy vers ces ports localhost.
     ports:

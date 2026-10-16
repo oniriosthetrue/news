@@ -19,6 +19,41 @@ router = APIRouter(prefix="/sync", tags=["sync"])
 settings = get_settings()
 
 
+@router.get("/engine-status")
+async def engine_status(request: Request) -> dict[str, Any]:
+    """État moteur du BOÎTIER, sondé en direct par le miroir VPS (flux VPS -> boîtier).
+
+    Protégé par la même signature HMAC que l'import (corps vide pour un GET).
+    Actif uniquement quand la sync est activée (= on est le boîtier/moteur).
+    Le miroir s'en sert pour son badge « LLM on/off » en temps réel.
+    """
+    if not settings.sync_enabled:
+        raise HTTPException(status_code=404, detail="Réservé au boîtier (moteur)")
+    secret = settings.sync_shared_secret
+    if not secret:
+        raise HTTPException(status_code=503, detail="Secret de sync non configuré")
+    signature = request.headers.get("X-Signature", "")
+    if not verify_signature(secret, b"", signature):
+        raise HTTPException(status_code=401, detail="Signature invalide")
+
+    import httpx
+
+    from ..clients import gnews, llm, newsapi, serper
+
+    async with httpx.AsyncClient() as client:
+        llm_online = await llm.online(client)
+        balance = await serper.get_balance(client) if serper.enabled() else None
+    return {
+        "llm_online": llm_online,
+        "serper_balance": (balance or {}).get("balance"),
+        "enabled": {
+            "serper": serper.enabled(),
+            "newsapi": newsapi.enabled(),
+            "gnews": gnews.enabled(),
+        },
+    }
+
+
 @router.post("/import")
 async def sync_import(
     request: Request,

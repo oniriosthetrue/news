@@ -62,6 +62,15 @@ class Settings(BaseSettings):
     sync_timeout: float = 30.0
     # Miroir : instance en lecture seule -> pas d'ordonnanceur, endpoint d'import actif.
     mirror_mode: bool = False
+    # --- Probe LLM temps réel (VPS -> boîtier) ---
+    # Le miroir n'a pas de LiteLLM. Pour le badge « LLM on/off », il SONDE le
+    # boîtier en direct (flux VPS -> boîtier, distinct du push news boîtier -> VPS).
+    # Côté VPS uniquement. engine_probe_url = URL joignable du boîtier (IP NetBird
+    # via Traefik), engine_probe_host = en-tête Host à envoyer pour le routage Traefik.
+    # Vide -> pas de probe : on retombe sur le dernier état poussé (table engine_status).
+    engine_probe_url: str = ""  # ex. http://100.73.55.66/api/sync/engine-status
+    engine_probe_host: str = ""  # ex. news.minervia.fr
+    engine_probe_timeout: float = 5.0
 
     # --- Pipeline ---
     scan_default_interval_hours: int = 6

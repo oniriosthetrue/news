@@ -156,6 +156,42 @@ async def push_snapshot(client: httpx.AsyncClient, snapshot: dict[str, Any]) -> 
 
 
 # --------------------------------------------------------------------------- #
+# Probe temps réel (côté VPS miroir) — VPS -> boîtier, pour le badge LLM
+# --------------------------------------------------------------------------- #
+async def probe_engine_status(client: httpx.AsyncClient) -> Optional[dict[str, Any]]:
+    """Sonde le boîtier en direct pour son état moteur (LLM on/off, credits).
+
+    Flux inverse du push (VPS -> boîtier). Signé HMAC comme l'import, pour que
+    seul le miroir puisse appeler l'endpoint. Renvoie le dict d'état, ou None si
+    le boîtier est injoignable / mal configuré (le miroir retombe alors sur le
+    dernier état poussé).
+    """
+    if not settings.engine_probe_url or not settings.sync_shared_secret:
+        return None
+    # Signature sur la chaîne vide : l'endpoint est un GET sans corps.
+    signature = sign(settings.sync_shared_secret, b"")
+    headers = {"X-Signature": signature}
+    if settings.engine_probe_host:
+        headers["Host"] = settings.engine_probe_host
+    try:
+        resp = await client.get(
+            settings.engine_probe_url,
+            headers=headers,
+            timeout=settings.engine_probe_timeout,
+        )
+    except httpx.HTTPError as exc:
+        logger.info("Probe boîtier injoignable (%s)", exc)
+        return None
+    if resp.status_code >= 400:
+        logger.info("Probe boîtier -> %s: %s", resp.status_code, resp.text[:160])
+        return None
+    try:
+        return resp.json()
+    except ValueError:
+        return None
+
+
+# --------------------------------------------------------------------------- #
 # Import (côté VPS miroir) — remplace tout le contenu par l'instantané
 # --------------------------------------------------------------------------- #
 def _parse_dt(value: Optional[str]) -> Optional[dt.datetime]:
