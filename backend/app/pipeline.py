@@ -84,6 +84,17 @@ def _parse_date(value: object) -> Optional[dt.datetime]:
     return parsed
 
 
+def _effective_date(item: dict) -> Optional[dt.datetime]:
+    """Date retenue pour un candidat : celle du scraping en priorite (celle qui
+    sera stockee), sinon celle renvoyee par l'API de recherche. Doit etre la
+    MEME pour le filtre de fenetre et la persistance, sinon des articles hors
+    fenetre passent le filtre puis sont stockes avec une date ancienne."""
+    scraped = item.get("_scraped")
+    return _parse_date(getattr(scraped, "published_at", None)) or _parse_date(
+        item.get("publishedDate")
+    )
+
+
 async def _ensure_queries(
     client: httpx.AsyncClient, db: Session, theme: Theme
 ) -> list[str]:
@@ -196,14 +207,9 @@ async def _persist_cluster(
 
     for g in group:
         scraped = g["_scraped"]
-        published = None
-        if scraped.published_at:
-            try:
-                published = dt.datetime.fromisoformat(
-                    scraped.published_at.replace("Z", "+00:00")
-                )
-            except ValueError:
-                published = None
+        # Meme date que celle utilisee par le filtre de fenetre (scraping en
+        # priorite, sinon API de recherche) -> coherence filtre/persistance.
+        published = _effective_date(g)
         db.add(
             Article(
                 url=g["url"],
@@ -237,15 +243,15 @@ async def scan_theme(db: Session, theme_id: int) -> dict:
         scraped = await _scrape_new(client, fresh)
 
         # Fenêtre temporelle stricte : on écarte les articles dont la date est
-        # connue et antérieure à `lookback_hours` (le bucket SearXNG est grossier).
+        # connue et antérieure à `lookback_hours`. On juge sur la date qui sera
+        # REELLEMENT stockée (celle du scraping en priorité, sinon celle de l'API)
+        # pour que le filtre et la persistance restent cohérents.
         cutoff = dt.datetime.now(dt.timezone.utc) - dt.timedelta(
             hours=theme.lookback_hours
         )
         in_window: list[dict] = []
         for item in scraped:
-            pub = _parse_date(item.get("publishedDate")) or _parse_date(
-                getattr(item["_scraped"], "published_at", None)
-            )
+            pub = _effective_date(item)
             # Sans date exploitable on garde l'article (le bucket a déjà filtré).
             if pub is None or pub >= cutoff:
                 in_window.append(item)
