@@ -6,7 +6,7 @@ stack qwen). Retourne une liste de résultats {title, url, content, ...}.
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, Optional
 
 import httpx
 
@@ -22,6 +22,7 @@ async def search(
     *,
     max_results: int = 15,
     pageno: int = 1,
+    time_range: Optional[str] = None,
 ) -> list[dict[str, Any]]:
     params = {
         "q": query,
@@ -29,8 +30,10 @@ async def search(
         "language": settings.searxng_language,
         "pageno": pageno,
     }
-    if settings.searxng_time_range:
-        params["time_range"] = settings.searxng_time_range
+    # time_range explicite (None -> réglage par défaut ; "" -> aucune limite).
+    tr = settings.searxng_time_range if time_range is None else time_range
+    if tr:
+        params["time_range"] = tr
     try:
         resp = await client.get(
             settings.searxng_url, params=params, timeout=settings.http_timeout

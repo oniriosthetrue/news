@@ -43,6 +43,7 @@ def create_theme(
         name=payload.name,
         description=payload.description,
         scan_interval_hours=payload.scan_interval_hours,
+        lookback_hours=payload.lookback_hours,
     )
     db.add(theme)
     db.commit()

@@ -18,10 +18,27 @@ logging.basicConfig(level=settings.log_level.upper())
 logger = logging.getLogger(__name__)
 
 
+def _migrate_add_columns() -> None:
+    """Ajoute les colonnes manquantes sur les tables existantes (pas d'Alembic).
+
+    `create_all` ne modifie pas une table déjà créée : on ajoute à la main les
+    colonnes introduites après le déploiement initial, de façon idempotente.
+    """
+    from sqlalchemy import text
+
+    adds = [
+        "ALTER TABLE themes ADD COLUMN IF NOT EXISTS lookback_hours integer NOT NULL DEFAULT 24",
+    ]
+    with engine.begin() as conn:
+        for stmt in adds:
+            conn.execute(text(stmt))
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Création des tables au démarrage (schéma simple, pas de migration).
     Base.metadata.create_all(bind=engine)
+    _migrate_add_columns()
     logger.info("Schéma base vérifié/créé")
     start_scheduler()
     try:

@@ -32,12 +32,14 @@ class ThemeCreate(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     description: str = Field(default="", max_length=2000)
     scan_interval_hours: int = Field(default=6, ge=1, le=168)
+    lookback_hours: int = Field(default=24, ge=1, le=8760)
 
 
 class ThemeUpdate(BaseModel):
     name: Optional[str] = Field(default=None, max_length=200)
     description: Optional[str] = Field(default=None, max_length=2000)
     scan_interval_hours: Optional[int] = Field(default=None, ge=1, le=168)
+    lookback_hours: Optional[int] = Field(default=None, ge=1, le=8760)
     is_active: Optional[bool] = None
 
 
@@ -47,6 +49,7 @@ class ThemeOut(BaseModel):
     name: str
     description: str
     scan_interval_hours: int
+    lookback_hours: int
     is_active: bool
     last_scanned_at: Optional[dt.datetime]
     created_at: dt.datetime

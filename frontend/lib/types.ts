@@ -8,6 +8,7 @@ export type Theme = {
   name: string;
   description: string;
   scan_interval_hours: number;
+  lookback_hours: number;
   is_active: boolean;
   last_scanned_at: string | null;
   created_at: string;

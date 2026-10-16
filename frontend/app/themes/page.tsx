@@ -14,10 +14,13 @@ export default function ThemesPage() {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [interval, setIntervalH] = useState(6);
+  const [lookback, setLookbackH] = useState(24);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Brouillon d'intervalle par thème (id -> valeur en cours d'édition).
   const [drafts, setDrafts] = useState<Record<number, number>>({});
+  // Brouillon de fenêtre de recherche par thème (id -> heures en arrière).
+  const [lookbackDrafts, setLookbackDrafts] = useState<Record<number, number>>({});
   const [savingId, setSavingId] = useState<number | null>(null);
 
   useEffect(() => {
@@ -36,7 +39,7 @@ export default function ThemesPage() {
     setError(null);
     setBusy(true);
     try {
-      await api.createTheme(name, description, interval);
+      await api.createTheme(name, description, interval, lookback);
       setName("");
       setDescription("");
       refresh();
@@ -80,6 +83,24 @@ export default function ThemesPage() {
     }
   }
 
+  async function saveLookback(t: Theme) {
+    const value = lookbackDrafts[t.id];
+    if (value == null || value === t.lookback_hours || value < 1 || value > 8760)
+      return;
+    setSavingId(t.id);
+    try {
+      await api.updateTheme(t.id, { lookback_hours: value });
+      setLookbackDrafts((d) => {
+        const next = { ...d };
+        delete next[t.id];
+        return next;
+      });
+      refresh();
+    } finally {
+      setSavingId(null);
+    }
+  }
+
   if (loading) return null;
 
   return (
@@ -106,7 +127,7 @@ export default function ThemesPage() {
             value={description}
             onChange={(e) => setDescription(e.target.value)}
           />
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <label className="text-sm text-neutral-500">Intervalle (h)</label>
             <input
               type="number"
@@ -115,6 +136,16 @@ export default function ThemesPage() {
               className="w-20 rounded-md border border-neutral-300 bg-transparent px-2 py-1 text-sm dark:border-neutral-700"
               value={interval}
               onChange={(e) => setIntervalH(Number(e.target.value))}
+            />
+            <label className="text-sm text-neutral-500">Fenêtre (h)</label>
+            <input
+              type="number"
+              min={1}
+              max={8760}
+              className="w-20 rounded-md border border-neutral-300 bg-transparent px-2 py-1 text-sm dark:border-neutral-700"
+              value={lookback}
+              onChange={(e) => setLookbackH(Number(e.target.value))}
+              title="Ne retenir que les articles publiés dans les N dernières heures"
             />
             <button
               type="submit"
@@ -177,6 +208,35 @@ export default function ThemesPage() {
                   {(drafts[t.id] ?? t.scan_interval_hours) !== t.scan_interval_hours && (
                     <button
                       onClick={() => saveInterval(t)}
+                      disabled={savingId === t.id}
+                      className="rounded-md bg-sky-600 px-2 py-1 text-xs font-semibold text-white hover:bg-sky-700 disabled:opacity-50"
+                    >
+                      {savingId === t.id ? "…" : "Enregistrer"}
+                    </button>
+                  )}
+                </div>
+                <div className="mt-1 flex items-center gap-2 text-xs text-neutral-500">
+                  <label>Articles des</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={8760}
+                    className="w-20 rounded-md border border-neutral-300 bg-transparent px-2 py-1 text-sm dark:border-neutral-700"
+                    value={lookbackDrafts[t.id] ?? t.lookback_hours}
+                    onChange={(e) =>
+                      setLookbackDrafts((d) => ({
+                        ...d,
+                        [t.id]: Math.max(
+                          1,
+                          Math.min(8760, Number(e.target.value) || 1),
+                        ),
+                      }))
+                    }
+                  />
+                  <span>dernières h</span>
+                  {(lookbackDrafts[t.id] ?? t.lookback_hours) !== t.lookback_hours && (
+                    <button
+                      onClick={() => saveLookback(t)}
                       disabled={savingId === t.id}
                       className="rounded-md bg-sky-600 px-2 py-1 text-xs font-semibold text-white hover:bg-sky-700 disabled:opacity-50"
                     >

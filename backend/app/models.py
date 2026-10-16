@@ -49,6 +49,9 @@ class Theme(Base):
     name: Mapped[str] = mapped_column(String(200))
     description: Mapped[str] = mapped_column(Text, default="")
     scan_interval_hours: Mapped[int] = mapped_column(Integer, default=6)
+    # Fenêtre de recherche : on ne retient que les articles publiés dans les
+    # `lookback_hours` dernières heures (bornée par le bucket SearXNG le plus proche).
+    lookback_hours: Mapped[int] = mapped_column(Integer, default=24)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     last_scanned_at: Mapped[Optional[dt.datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True

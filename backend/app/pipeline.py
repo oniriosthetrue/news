@@ -18,6 +18,7 @@ import datetime as dt
 import hashlib
 import logging
 import re
+from typing import Optional
 from urllib.parse import urlsplit
 
 import httpx
@@ -55,6 +56,34 @@ def _jaccard(a: set[str], b: set[str]) -> float:
     return len(a & b) / len(a | b)
 
 
+def _searxng_bucket(lookback_hours: int) -> str:
+    """Bucket SearXNG (day/week/month/year) qui couvre la fenêtre demandée.
+
+    SearXNG ne supporte pas les heures arbitraires : on arrondit à la période
+    immédiatement supérieure, puis on filtre précisément après coup.
+    """
+    if lookback_hours <= 24:
+        return "day"
+    if lookback_hours <= 24 * 7:
+        return "week"
+    if lookback_hours <= 24 * 31:
+        return "month"
+    return "year"
+
+
+def _parse_date(value: object) -> Optional[dt.datetime]:
+    if not value:
+        return None
+    text = str(value).strip().replace("Z", "+00:00")
+    try:
+        parsed = dt.datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=dt.timezone.utc)
+    return parsed
+
+
 async def _ensure_queries(
     client: httpx.AsyncClient, db: Session, theme: Theme
 ) -> list[str]:
@@ -73,7 +102,7 @@ async def _ensure_queries(
 
 
 async def _gather_candidates(
-    client: httpx.AsyncClient, queries: list[str]
+    client: httpx.AsyncClient, queries: list[str], time_range: Optional[str] = None
 ) -> list[dict]:
     """Interroge SearXNG pour chaque requête (concurrence bornée)."""
     sem = asyncio.Semaphore(settings.llm_concurrency)
@@ -81,7 +110,10 @@ async def _gather_candidates(
     async def one(query: str) -> list[dict]:
         async with sem:
             return await searxng.search(
-                client, query, max_results=settings.max_results_per_query
+                client,
+                query,
+                max_results=settings.max_results_per_query,
+                time_range=time_range,
             )
 
     chunks = await asyncio.gather(*(one(q) for q in queries))
@@ -195,13 +227,29 @@ async def scan_theme(db: Session, theme_id: int) -> dict:
 
     async with httpx.AsyncClient() as client:
         queries = await _ensure_queries(client, db, theme)
-        candidates = await _gather_candidates(client, queries)
+        bucket = _searxng_bucket(theme.lookback_hours)
+        candidates = await _gather_candidates(client, queries, time_range=bucket)
 
         known = _existing_hashes(db, [c["url"] for c in candidates])
         fresh = [c for c in candidates if _url_hash(c["url"]) not in known]
         fresh = fresh[: settings.max_articles_per_scan]
 
         scraped = await _scrape_new(client, fresh)
+
+        # Fenêtre temporelle stricte : on écarte les articles dont la date est
+        # connue et antérieure à `lookback_hours` (le bucket SearXNG est grossier).
+        cutoff = dt.datetime.now(dt.timezone.utc) - dt.timedelta(
+            hours=theme.lookback_hours
+        )
+        in_window: list[dict] = []
+        for item in scraped:
+            pub = _parse_date(item.get("publishedDate")) or _parse_date(
+                getattr(item["_scraped"], "published_at", None)
+            )
+            # Sans date exploitable on garde l'article (le bucket a déjà filtré).
+            if pub is None or pub >= cutoff:
+                in_window.append(item)
+        scraped = in_window
 
         groups = _group_by_similarity(scraped)
         # Limite le nombre de clusters (donc d'appels LLM de résumé) par scan.

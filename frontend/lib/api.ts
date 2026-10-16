@@ -79,10 +79,15 @@ export const api = {
 
   // --- Themes ---
   listThemes: () => request<Theme[]>("/themes"),
-  createTheme: (name: string, description: string, scan_interval_hours: number) =>
+  createTheme: (
+    name: string,
+    description: string,
+    scan_interval_hours: number,
+    lookback_hours: number,
+  ) =>
     request<Theme>("/themes", {
       method: "POST",
-      body: JSON.stringify({ name, description, scan_interval_hours }),
+      body: JSON.stringify({ name, description, scan_interval_hours, lookback_hours }),
     }),
   updateTheme: (id: number, patch: Partial<Theme>) =>
     request<Theme>(`/themes/${id}`, {
