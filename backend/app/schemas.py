@@ -62,6 +62,7 @@ class ArticleOut(BaseModel):
     url: str
     title: str
     source: str
+    content: str
     image_url: Optional[str]
     published_at: Optional[dt.datetime]
 

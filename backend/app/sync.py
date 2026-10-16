@@ -44,8 +44,9 @@ def build_snapshot(
 ) -> dict[str, Any]:
     """Sérialise toutes les données visibles en un dict JSON-compatible.
 
-    On n'inclut PAS `content` (corps des articles) : inutile à l'affichage du
-    fil et lourd à transférer. On garde titre, résumé, source, URL, image, dates.
+    On INCLUT `content` (corps texte scrapé) : le miroir réplique le texte de
+    chaque article et l'affiche avec un lien vers la source d'origine. On garde
+    aussi titre, résumé, source, URL, image, dates.
 
     `engine_status` (optionnel) : état du moteur calculé par le boîtier
     ({"llm_online": bool, "serper_balance": int|None, "enabled": {...}}). Le
@@ -98,6 +99,7 @@ def build_snapshot(
                         "url_hash": a.url_hash,
                         "title": a.title,
                         "source": a.source,
+                        "content": a.content,
                         "image_url": a.image_url,
                         "published_at": _iso(a.published_at),
                         "fetched_at": _iso(a.fetched_at),
@@ -313,6 +315,7 @@ def import_snapshot(db: Session, snapshot: dict[str, Any]) -> dict[str, int]:
                     url_hash=a["url_hash"],
                     title=a.get("title", ""),
                     source=a.get("source", ""),
+                    content=a.get("content", ""),
                     image_url=a.get("image_url"),
                     published_at=_parse_dt(a.get("published_at")),
                 )

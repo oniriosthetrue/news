@@ -19,6 +19,7 @@ export type Article = {
   url: string;
   title: string;
   source: string;
+  content: string;
   image_url: string | null;
   published_at: string | null;
 };
