@@ -64,7 +64,7 @@ services:
       # Réglages pipeline.
       SCAN_DEFAULT_INTERVAL_HOURS: "6"
       MAX_QUERIES_PER_THEME: "8"
-      MAX_RESULTS_PER_QUERY: "15"
+      MAX_RESULTS_PER_QUERY: "25"
       MAX_ARTICLES_PER_SCAN: "120"
       LLM_CONCURRENCY: "2"
       LOG_LEVEL: INFO

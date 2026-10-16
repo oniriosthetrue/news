@@ -1,9 +1,10 @@
-"""Recherche unifiée : SearXNG d'abord, puis replis sur API à clé si vide.
+"""Recherche unifiee : SearXNG puis replis sur API a cle, en FUSION.
 
-SearXNG est gratuit mais rate-limité (moteurs suspendus -> liste vide). Quand
-il ne renvoie rien, on essaie des API de news par clé, dans l'ordre :
-NewsAPI -> GNews -> Serper. Chaque repli n'est appelé QUE si le précédent
-revient vide ET si sa clé est configurée, pour économiser les quotas.
+SearXNG est gratuit mais rate-limite (moteurs suspendus -> liste vide). Pour
+maximiser le nombre d'articles (et se rapprocher de la richesse de Google
+News), on ne s'arrete plus a la premiere source non vide : on interroge
+TOUTES les sources actives et on fusionne leurs resultats (union dedupliquee
+par URL). SearXNG n'est interroge que s'il est active.
 """
 from __future__ import annotations
 
@@ -18,10 +19,10 @@ from . import gnews, newsapi, searxng, serper
 logger = logging.getLogger(__name__)
 settings = get_settings()
 
-# Replis ordonnés : (nom, module). Appelés si SearXNG désactivé ou revient vide.
-# Sources à quota RENOUVELABLE chaque jour d'abord (NewsAPI, GNews ~100 req/j),
-# Serper en dernier : ses 2500 crédits sont un stock UNIQUE qui ne se renouvelle pas.
-_FALLBACKS = (("NewsAPI", newsapi), ("GNews", gnews), ("Serper", serper))
+# Sources ordonnees : (nom, module). Toutes les sources actives sont interrogees
+# puis fusionnees. NewsAPI/GNews : quota renouvelable ~100 req/j ; Serper (index
+# Google News) : stock de credits unique -> appele en dernier mais systematiquement.
+_SOURCES = (("SearXNG", searxng), ("NewsAPI", newsapi), ("GNews", gnews), ("Serper", serper))
 
 
 async def search(
@@ -31,21 +32,22 @@ async def search(
     max_results: int = 15,
     time_range: Optional[str] = None,
 ) -> list[dict[str, Any]]:
-    # SearXNG d'abord, sauf si désactivé (instance partagée -> quota saturé).
-    if settings.searxng_enabled:
-        results = await searxng.search(
-            client, query, max_results=max_results, time_range=time_range
-        )
-        if results:
-            return results
-
-    for name, mod in _FALLBACKS:
+    """Interroge toutes les sources actives et fusionne leurs resultats."""
+    merged: dict[str, dict[str, Any]] = {}
+    for name, mod in _SOURCES:
+        if name == "SearXNG" and not settings.searxng_enabled:
+            continue
         if not mod.enabled():
             continue
-        logger.info("SearXNG indisponible pour %r -> repli %s", query, name)
-        results = await mod.search(
-            client, query, max_results=max_results, time_range=time_range
-        )
-        if results:
-            return results
-    return results
+        try:
+            results = await mod.search(
+                client, query, max_results=max_results, time_range=time_range
+            )
+        except Exception as exc:  # une source en echec ne doit pas bloquer les autres
+            logger.warning("Source %s erreur pour %r: %s", name, query, exc)
+            continue
+        for r in results:
+            url = r.get("url")
+            if url:
+                merged.setdefault(url, r)
+    return list(merged.values())

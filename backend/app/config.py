@@ -50,7 +50,7 @@ class Settings(BaseSettings):
     # --- Pipeline ---
     scan_default_interval_hours: int = 6
     max_queries_per_theme: int = 8
-    max_results_per_query: int = 15
+    max_results_per_query: int = 25
     max_articles_per_scan: int = 120
     llm_concurrency: int = 2
     http_timeout: float = 30.0

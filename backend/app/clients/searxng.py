@@ -16,6 +16,11 @@ logger = logging.getLogger(__name__)
 settings = get_settings()
 
 
+def enabled() -> bool:
+    """Toujours vrai : le garde `searxng_enabled` dans search.py pilote l'appel."""
+    return True
+
+
 async def search(
     client: httpx.AsyncClient,
     query: str,
