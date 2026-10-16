@@ -1,0 +1,86 @@
+# ==============================================================================
+# news.minervia.fr — déploiement VPS (MIROIR en lecture seule)
+# ------------------------------------------------------------------------------
+# Ce fichier est pour le VPS UNIQUEMENT. Le VPS n'a NI LiteLLM NI clés de
+# recherche : il reçoit les résultats déjà résumés poussés par le boîtier via
+# /api/sync/import (signature HMAC) et les affiche. Boîtier éteint -> le VPS
+# sert le dernier instantané reçu.
+#
+# Sur le VPS :
+#   1. cp .env.example .env  puis renseigner POSTGRES_PASSWORD, JWT_SECRET,
+#      SYNC_SHARED_SECRET (= même secret que sur le boîtier), MIRROR_MODE=true.
+#   2. docker compose -f docker-compose.vps.yml up -d --build
+#
+# Le boîtier, lui, pousse vers l'URL publique du VPS (SYNC_TARGET_URL).
+# ==============================================================================
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: news-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: news
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: news
+    volumes:
+      - news-db-data:/var/lib/postgresql/data
+    networks: [newsnet]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U news -d news"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build: ./backend
+    container_name: news-api
+    restart: unless-stopped
+    depends_on:
+      db: { condition: service_healthy }
+    environment:
+      DATABASE_URL: postgresql+psycopg://news:${POSTGRES_PASSWORD}@db:5432/news
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
+      ACCESS_TOKEN_TTL_MIN: "1440"
+      # Miroir : pas de LLM ni de recherche. Ces valeurs sont inusitées
+      # (scheduler coupé) mais évitent les erreurs de démarrage.
+      LITELLM_BASE_URL: http://localhost:4000/v1
+      LITELLM_API_KEY: mirror-unused
+      LITELLM_MODEL: IA
+      SEARXNG_ENABLED: "false"
+      LOG_LEVEL: INFO
+      # --- Mode miroir + réception des instants du boîtier -------------------
+      MIRROR_MODE: "true"
+      SYNC_SHARED_SECRET: ${SYNC_SHARED_SECRET:?set SYNC_SHARED_SECRET (same as boitier)}
+      SYNC_ENABLED: "false"  # le miroir ne pousse pas, il reçoit
+    networks: [newsnet]
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.news-api.rule=Host(`news.minervia.fr`) && PathPrefix(`/api`)"
+      - "traefik.http.routers.news-api.entrypoints=web"
+      - "traefik.http.routers.news-api.priority=20"
+      - "traefik.http.services.news-api.loadbalancer.server.port=8000"
+
+  web:
+    build:
+      context: ./frontend
+      args:
+        NEXT_PUBLIC_API_BASE: ${NEXT_PUBLIC_API_BASE:-/api}
+    container_name: news-web
+    restart: unless-stopped
+    depends_on: [api]
+    networks: [newsnet]
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.news-web.rule=Host(`news.minervia.fr`)"
+      - "traefik.http.routers.news-web.entrypoints=web"
+      - "traefik.http.routers.news-web.priority=10"
+      - "traefik.http.services.news-web.loadbalancer.server.port=3000"
+
+networks:
+  # Réseau LOCAL au VPS (pas de partage avec une stack qwen ici).
+  newsnet:
+    driver: bridge
+
+volumes:
+  news-db-data:

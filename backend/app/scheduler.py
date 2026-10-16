@@ -18,6 +18,7 @@ from .config import get_settings
 from .db import SessionLocal
 from .models import Theme
 from .pipeline import scan_theme
+from . import sync as sync_module
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -41,10 +42,33 @@ def _run_scan(theme_id: int) -> None:
     try:
         with SessionLocal() as db:
             asyncio.run(scan_theme(db, theme_id))
+        # Le scan a produit du nouveau contenu : on le pousse au miroir VPS.
+        if settings.sync_enabled:
+            push_to_vps()
     except Exception:  # noqa: BLE001 — un job ne doit jamais tuer l'ordonnanceur
         logger.exception("Échec du scan du thème %s", theme_id)
     finally:
         lock.release()
+
+
+def push_to_vps() -> bool:
+    """Construit l'instantané et le pousse au VPS (miroir). Best-effort."""
+    if not settings.sync_enabled:
+        return False
+    try:
+        with SessionLocal() as db:
+            snapshot = sync_module.build_snapshot(db)
+        return asyncio.run(_push_async(snapshot))
+    except Exception:  # noqa: BLE001 — la sync ne doit jamais tuer l'ordonnanceur
+        logger.exception("Échec du push vers le VPS")
+        return False
+
+
+async def _push_async(snapshot: dict) -> bool:
+    import httpx
+
+    async with httpx.AsyncClient() as client:
+        return await sync_module.push_snapshot(client, snapshot)
 
 
 def trigger_scan(theme_id: int) -> None:
@@ -100,6 +124,15 @@ def start_scheduler() -> BackgroundScheduler:
     _scheduler = BackgroundScheduler(timezone="UTC")
     # Tick toutes les 10 min : vérifie les thèmes échus et programme leurs scans.
     _scheduler.add_job(_tick, "interval", minutes=10, id="tick", max_instances=1)
+    # Sync périodique vers le VPS (filet de sécurité en plus du push post-scan).
+    if settings.sync_enabled:
+        _scheduler.add_job(
+            push_to_vps,
+            "interval",
+            minutes=settings.sync_interval_minutes,
+            id="sync",
+            max_instances=1,
+        )
     _scheduler.start()
     logger.info("Ordonnanceur démarré (tick 10 min, intervalle défaut %dh)",
                 settings.scan_default_interval_hours)

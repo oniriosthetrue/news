@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from . import models  # noqa: F401  — enregistre les tables sur Base.metadata
 from .config import get_settings
 from .db import Base, engine
-from .routers import auth, news, themes, usage
+from .routers import auth, news, sync, themes, usage
 from .scheduler import shutdown_scheduler, start_scheduler
 
 settings = get_settings()
@@ -40,11 +40,15 @@ async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
     _migrate_add_columns()
     logger.info("Schéma base vérifié/créé")
-    start_scheduler()
+    if settings.mirror_mode:
+        logger.info("Mode miroir : ordonnanceur désactivé (lecture seule)")
+    else:
+        start_scheduler()
     try:
         yield
     finally:
-        shutdown_scheduler()
+        if not settings.mirror_mode:
+            shutdown_scheduler()
 
 
 app = FastAPI(
@@ -67,6 +71,7 @@ app.include_router(auth.router, prefix="/api")
 app.include_router(themes.router, prefix="/api")
 app.include_router(news.router, prefix="/api")
 app.include_router(usage.router, prefix="/api")
+app.include_router(sync.router, prefix="/api")
 
 
 @app.get("/api/health", tags=["health"])

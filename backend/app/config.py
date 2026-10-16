@@ -47,6 +47,22 @@ class Settings(BaseSettings):
     serper_url: str = "https://google.serper.dev/search"
     serper_timeout: float = 20.0
 
+    # --- Sync vers le VPS (miroir en lecture seule) ---
+    # Le boîtier (moteur : recherche + LLM) pousse les résultats DÉJÀ résumés
+    # vers le VPS via une API signée (HMAC). Le VPS, lui, n'a jamais besoin du
+    # LLM : il ne fait que recevoir et afficher. Boîtier éteint -> le VPS sert
+    # le dernier contenu reçu ; boîtier rallumé -> les scans reprennent et repoussent.
+    #
+    # Côté BOÎTIER : sync_enabled=true + sync_target_url + sync_shared_secret.
+    # Côté VPS (miroir) : mirror_mode=true + sync_shared_secret (scheduler coupé).
+    sync_enabled: bool = False
+    sync_target_url: str = ""  # ex. https://news.minervia.fr (le /api/sync/import est ajouté)
+    sync_shared_secret: str = ""  # même valeur des deux côtés (signature HMAC des payloads)
+    sync_interval_minutes: int = 30  # push périodique en plus du push post-scan
+    sync_timeout: float = 30.0
+    # Miroir : instance en lecture seule -> pas d'ordonnanceur, endpoint d'import actif.
+    mirror_mode: bool = False
+
     # --- Pipeline ---
     scan_default_interval_hours: int = 6
     max_queries_per_theme: int = 16

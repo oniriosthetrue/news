@@ -69,6 +69,16 @@ services:
       MAX_CLUSTERS_PER_SCAN: "40"
       LLM_CONCURRENCY: "2"
       LOG_LEVEL: INFO
+      # --- Synchronisation vers le VPS (miroir en lecture seule) -------------
+      # Boîtier : SYNC_ENABLED=true + SYNC_TARGET_URL (URL publique du VPS) +
+      # SYNC_SHARED_SECRET. Le boîtier pousse un instantané après chaque scan et
+      # toutes les SYNC_INTERVAL_MINUTES. VPS : MIRROR_MODE=true + même secret,
+      # et il n'a PAS besoin de LiteLLM/recherche (lecture seule).
+      SYNC_ENABLED: ${SYNC_ENABLED:-false}
+      SYNC_TARGET_URL: ${SYNC_TARGET_URL:-}
+      SYNC_SHARED_SECRET: ${SYNC_SHARED_SECRET:-}
+      SYNC_INTERVAL_MINUTES: ${SYNC_INTERVAL_MINUTES:-30}
+      MIRROR_MODE: ${MIRROR_MODE:-false}
     networks: [mynetwork]
     labels:
       - "traefik.enable=true"
