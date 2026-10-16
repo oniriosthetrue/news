@@ -1,0 +1,98 @@
+# ==============================================================================
+# news.minervia.fr — agrégateur de news par thème (LLM + SearXNG)
+# ------------------------------------------------------------------------------
+# Stack INDÉPENDANTE qui rejoint le réseau `mynetwork` EXTERNE de la stack
+# qwen_3.8_vnimanieAI pour réutiliser SearXNG, LiteLLM et Traefik existants.
+#
+# PRÉALABLE (une seule fois, à faire par l'utilisateur) :
+#   1. Créer le réseau externe :   docker network create mynetwork
+#   2. Dans ~/qwen_3.8_vnimanieAI/docker-compose.yml, déclarer le réseau en
+#      `external: true` puis relancer la stack qwen (./scripts/launch-stack.sh).
+#   3. Copier .env.example -> .env et renseigner les secrets.
+#
+# Lancement (par l'utilisateur uniquement) :
+#   cd ~/news && docker compose up -d --build
+# ==============================================================================
+
+services:
+  # --------------------------- PostgreSQL (données news) ---------------------
+  db:
+    image: postgres:16-alpine
+    container_name: news-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: news
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: news
+    volumes:
+      - news-db-data:/var/lib/postgresql/data
+    networks: [mynetwork]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U news -d news"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # --------------------------- API (FastAPI) ---------------------------------
+  api:
+    build: ./backend
+    container_name: news-api
+    restart: unless-stopped
+    depends_on:
+      db: { condition: service_healthy }
+    environment:
+      DATABASE_URL: postgresql+psycopg://news:${POSTGRES_PASSWORD}@db:5432/news
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
+      ACCESS_TOKEN_TTL_MIN: "1440"
+      # LiteLLM (passerelle LLM existante, alias "IA") — réseau mynetwork.
+      LITELLM_BASE_URL: http://litellm:4000/v1
+      LITELLM_API_KEY: ${LITELLM_MASTER_KEY:?set LITELLM_MASTER_KEY in .env}
+      LITELLM_MODEL: ${LITELLM_MODEL:-IA}
+      # SearXNG (méta-moteur existant) — réseau mynetwork, format JSON activé.
+      SEARXNG_URL: http://searxng:8080/search
+      SEARXNG_LANGUAGE: fr-FR
+      SEARXNG_TIME_RANGE: day
+      # Réglages pipeline.
+      SCAN_DEFAULT_INTERVAL_HOURS: "6"
+      MAX_QUERIES_PER_THEME: "8"
+      MAX_RESULTS_PER_QUERY: "15"
+      MAX_ARTICLES_PER_SCAN: "120"
+      LLM_CONCURRENCY: "2"
+      LOG_LEVEL: INFO
+    networks: [mynetwork]
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.news-api.rule=Host(`news.minervia.fr`) && PathPrefix(`/api`)"
+      - "traefik.http.routers.news-api.entrypoints=web"
+      - "traefik.http.routers.news-api.priority=20"
+      - "traefik.http.services.news-api.loadbalancer.server.port=8000"
+
+  # --------------------------- Web (Next.js SPA) -----------------------------
+  web:
+    build:
+      context: ./frontend
+      args:
+        # URL de l'API vue par le navigateur (même origine que le web via Traefik).
+        NEXT_PUBLIC_API_BASE: ${NEXT_PUBLIC_API_BASE:-/api}
+    container_name: news-web
+    restart: unless-stopped
+    depends_on: [api]
+    networks: [mynetwork]
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.news-web.rule=Host(`news.minervia.fr`)"
+      - "traefik.http.routers.news-web.entrypoints=web"
+      - "traefik.http.routers.news-web.priority=10"
+      - "traefik.http.services.news-web.loadbalancer.server.port=3000"
+
+networks:
+  # Réseau PARTAGÉ avec la stack qwen (SearXNG, LiteLLM, Traefik). Externe.
+  # Compose préfixe le nom réseau du nom du projet qwen -> le vrai réseau créé
+  # par la stack qwen est `qwen_38_vnimanieai_mynetwork`. On pointe dessus par
+  # `name:` pour éviter de créer un réseau séparé ou de toucher à la stack qwen.
+  mynetwork:
+    external: true
+    name: qwen_38_vnimanieai_mynetwork
+
+volumes:
+  news-db-data:

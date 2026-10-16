@@ -1,0 +1,10 @@
+# Dépendances et build
+node_modules
+.next
+
+# Git
+.git
+
+# Divers
+*.log
+.DS_Store
