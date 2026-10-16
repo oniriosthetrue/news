@@ -1,8 +1,9 @@
-"""Recherche unifiée : SearXNG d'abord, repli Serper si SearXNG ne renvoie rien.
+"""Recherche unifiée : SearXNG d'abord, puis replis sur API à clé si vide.
 
-SearXNG est gratuit mais rate-limité (moteurs suspendus -> liste vide). Serper
-(API Google à clé) sert de secours : on ne l'appelle QUE si SearXNG revient
-vide, pour économiser son quota.
+SearXNG est gratuit mais rate-limité (moteurs suspendus -> liste vide). Quand
+il ne renvoie rien, on essaie des API de news par clé, dans l'ordre :
+NewsAPI -> GNews -> Serper. Chaque repli n'est appelé QUE si le précédent
+revient vide ET si sa clé est configurée, pour économiser les quotas.
 """
 from __future__ import annotations
 
@@ -11,9 +12,12 @@ from typing import Any, Optional
 
 import httpx
 
-from . import searxng, serper
+from . import gnews, newsapi, searxng, serper
 
 logger = logging.getLogger(__name__)
+
+# Replis ordonnés : (nom, module). Appelés seulement si SearXNG revient vide.
+_FALLBACKS = (("NewsAPI", newsapi), ("GNews", gnews), ("Serper", serper))
 
 
 async def search(
@@ -28,9 +32,14 @@ async def search(
     )
     if results:
         return results
-    if serper.enabled():
-        logger.info("SearXNG vide pour %r -> repli Serper", query)
-        results = await serper.search(
+
+    for name, mod in _FALLBACKS:
+        if not mod.enabled():
+            continue
+        logger.info("SearXNG vide pour %r -> repli %s", query, name)
+        results = await mod.search(
             client, query, max_results=max_results, time_range=time_range
         )
+        if results:
+            return results
     return results

@@ -27,8 +27,19 @@ class Settings(BaseSettings):
     searxng_language: str = "fr-FR"
     searxng_time_range: str = "day"
 
-    # --- Serper.dev (API Google, repli quand SearXNG est rate-limité) ---
-    # Clé gratuite : 2500 requêtes. Vide -> repli désactivé (SearXNG seul).
+    # --- Replis de recherche (quand SearXNG est rate-limité / vide) ---
+    # Ordre d'appel : SearXNG -> NewsAPI -> GNews -> Serper. Chaque client
+    # n'est appelé que si les précédents reviennent vides ET si sa clé est mise.
+    # Clé vide -> client désactivé. NewsAPI/GNews : ~100 req/jour gratuites.
+    newsapi_api_key: str = ""
+    newsapi_url: str = "https://newsapi.org/v2/everything"
+    newsapi_timeout: float = 20.0
+
+    gnews_api_key: str = ""
+    gnews_url: str = "https://gnews.io/api/v4/search"
+    gnews_timeout: float = 20.0
+
+    # Serper.dev (API Google). Clé gratuite : 2500 requêtes. En dernier recours.
     serper_api_key: str = ""
     serper_url: str = "https://google.serper.dev/search"
     serper_timeout: float = 20.0

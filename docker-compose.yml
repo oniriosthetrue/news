@@ -52,8 +52,11 @@ services:
       SEARXNG_URL: http://searxng:8080/search
       SEARXNG_LANGUAGE: fr-FR
       SEARXNG_TIME_RANGE: day
-      # Serper.dev (API Google) — repli quand SearXNG est rate-limité.
-      # Clé gratuite (2500 req) sur https://serper.dev. Vide -> repli désactivé.
+      # Replis de recherche quand SearXNG est rate-limité (vide). Ordre :
+      # NewsAPI -> GNews -> Serper. Clé vide -> client désactivé.
+      # NewsAPI/GNews : ~100 req/jour gratuites. Serper : 2500 req (actuellement HS).
+      NEWSAPI_API_KEY: ${NEWSAPI_API_KEY:-}
+      GNEWS_API_KEY: ${GNEWS_API_KEY:-}
       SERPER_API_KEY: ${SERPER_API_KEY:-}
       # Réglages pipeline.
       SCAN_DEFAULT_INTERVAL_HOURS: "6"
