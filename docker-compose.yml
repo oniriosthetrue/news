@@ -52,6 +52,9 @@ services:
       SEARXNG_URL: http://searxng:8080/search
       SEARXNG_LANGUAGE: fr-FR
       SEARXNG_TIME_RANGE: day
+      # Serper.dev (API Google) — repli quand SearXNG est rate-limité.
+      # Clé gratuite (2500 req) sur https://serper.dev. Vide -> repli désactivé.
+      SERPER_API_KEY: ${SERPER_API_KEY:-}
       # Réglages pipeline.
       SCAN_DEFAULT_INTERVAL_HOURS: "6"
       MAX_QUERIES_PER_THEME: "8"

@@ -27,7 +27,7 @@ from sqlalchemy.orm import Session
 
 from .config import get_settings
 from .models import Article, Cluster, Query, Theme
-from .clients import llm, searxng, scrape
+from .clients import llm, scrape, search as search_client
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -109,7 +109,7 @@ async def _gather_candidates(
 
     async def one(query: str) -> list[dict]:
         async with sem:
-            return await searxng.search(
+            return await search_client.search(
                 client,
                 query,
                 max_results=settings.max_results_per_query,

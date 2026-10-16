@@ -27,6 +27,12 @@ class Settings(BaseSettings):
     searxng_language: str = "fr-FR"
     searxng_time_range: str = "day"
 
+    # --- Serper.dev (API Google, repli quand SearXNG est rate-limité) ---
+    # Clé gratuite : 2500 requêtes. Vide -> repli désactivé (SearXNG seul).
+    serper_api_key: str = ""
+    serper_url: str = "https://google.serper.dev/search"
+    serper_timeout: float = 20.0
+
     # --- Pipeline ---
     scan_default_interval_hours: int = 6
     max_queries_per_theme: int = 8
