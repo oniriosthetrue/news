@@ -1,0 +1,122 @@
+# ==============================================================================
+# SearXNG — configuration locale (api-rpg / qwen_3.8_vnimanieAI)
+# But : fournir la recherche web a Open WebUI (qui consomme l'API JSON)
+#       et a news.minervia.fr (agregateur d'actus).
+# Docs : https://docs.searxng.org/admin/settings/settings.html
+#
+# `use_default_settings: true` => on ne redecrit que ce qui est necessaire,
+# tout le reste (moteurs, locales, ...) vient des valeurs par defaut de l'image.
+#
+# IMPORTANT : ce fichier est monte EN LECTURE SEULE dans le conteneur.
+# Ne pas le laisser en rw : SearXNG y ecrirait ses logs / ses defauts.
+# ==============================================================================
+use_default_settings: true
+
+general:
+  debug: false
+  instance_name: "SearXNG"
+
+server:
+  # URL interne : Open WebUI / news joint SearXNG par le nom de service docker,
+  # pas par le nom de domaine (le conteneur n'a pas de port publie).
+  base_url: "http://searxng:8080/"
+  # Secret de session / signature des liens internes. A ne jamais partager.
+  # NB : la balise "!ENV \${VAR}" n'est pas gerree par cette image (erreur
+  # "could not determine a constructor for the tag '!ENV'") -> secret en dur.
+  secret_key: "967e62289045fc446ecba5049f02cc756bd1033725481ee7c468485714479fa7"
+  # limiter=false : le bot-detection exige Valkey/Redis (log "The limiter
+  # requires Valkey"). Sans Valkey, limiter=true est inoperant et peut provoquer
+  # de faux rejets internes. On le desactive (SearXNG n'est pas expose sur
+  # Internet : joint uniquement en interne par Open WebUI via le reseau docker).
+  limiter: false
+  # trusted_proxies : conserve pour le cas ou le limiter serait reactive plus tard
+  # avec un Valkey (les conteneurs derriere Traefik sont de confiance).
+  trusted_proxies:
+    - "127.0.0.0/8"
+    - "::1"
+    - "172.16.0.0/12"
+  # NB : cette image ne verifie PAS l'en-tete X-Api-Key (la cle `api_key` est
+  # ignoree) et OWUI ne l'envoie pas => ne pas ajouter api_key ici, ce serait
+  # un piege pour l'API JSON en cas de mise a jour de l'image.
+  public: false
+  image_proxy: false
+
+search:
+  # `json` est OBLIGATOIRE pour Open WebUI / news : sans lui, /search?format=json
+  # renvoie 403 "forbidden" (l'API JSON n'est pas active par defaut).
+  formats:
+    - html
+    - json
+  autocomplete: "bing"
+  safesearch: 0
+  locale: "fr-FR"
+
+# ------------------------------------------------------------------------------
+# Moteurs : liste explicite.
+#
+# PROBLEME corrige par ce patch (2026-10-16) : l'ancienne config ne gardait que
+# bing + startpage. `google cse` (variante active par defaut, distincte de
+# `google`) restait actif et se faisait suspendre "too many requests". Des que
+# bing/startpage etaient eux-memes limites (scans frequents de l'agregateur),
+# TOUS les moteurs etaient suspendus => reponse 200 mais liste VIDE.
+#
+# STRATEGIE : elargir la liste de moteurs. SearXNG suspend automatiquement ceux
+# qui repondent mal (CAPTCHA / 429) et utilise les autres. Plus il y a de
+# moteurs valides, moins on a de risque d'obtenir zero resultat. On desactive
+# explicitement `google cse` (source de la suspension) et les moteurs connus
+# casses depuis ce boitier.
+#
+# APRES APPLICATION : tester chaque moteur ajoute (voir README.md du patch) et
+# passer en `disabled: true` ceux qui repondent par CAPTCHA / access denied.
+# Les noms inconnus de l'image sont ignores silencieusement.
+# ------------------------------------------------------------------------------
+engines:
+  # --- Actifs (generalistes, verifies ou candidats a verifier) ---
+  - name: bing
+    disabled: false
+  - name: startpage
+    disabled: false
+  - name: mojeek
+    disabled: false
+  - name: marginalia
+    disabled: false
+  - name: yahoo
+    disabled: false
+  # --- Actifs (news : utiles a l'agregateur d'actus) ---
+  - name: bing news
+    disabled: false
+  - name: startpage news
+    disabled: false
+  - name: mojeek news
+    disabled: false
+  - name: yahoo news
+    disabled: false
+  - name: google news
+    disabled: false
+  # --- Desactifs (CAPTCHA / access denied / suspension IP depuis ce boitier) ---
+  - name: google
+    disabled: true
+  - name: google cse
+    disabled: true
+  - name: google images
+    disabled: true
+  - name: google videos
+    disabled: true
+  - name: google scholar
+    disabled: true
+  - name: duckduckgo
+    disabled: true
+  - name: duckduckgo images
+    disabled: true
+  - name: duckduckgo news
+    disabled: true
+  - name: duckduckgo videos
+    disabled: true
+  - name: brave
+    disabled: true
+  - name: qwant
+    disabled: true
+  - name: qwant images
+    disabled: true
+  - name: qwant news
+    disabled: true
