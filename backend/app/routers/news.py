@@ -2,12 +2,12 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from ..db import get_db
 from ..deps import get_current_user
-from ..models import Cluster, Theme, User
+from ..models import Article, Cluster, Theme, User
 from ..schemas import ClusterOut
 
 router = APIRouter(prefix="/news", tags=["news"])
@@ -30,7 +30,18 @@ def feed(
         if owned is None or owned.user_id != user.id:
             raise HTTPException(status_code=404, detail="Thème introuvable")
         stmt = stmt.where(Cluster.theme_id == theme_id)
-    stmt = stmt.order_by(Cluster.created_at.desc()).limit(limit)
+    # Tri : actualite la plus recente en haut. On trie par la date de publication
+    # la plus recente des articles du cluster (repli : date de creation du
+    # cluster). Les clusters plus anciens restent au fil (aucune suppression).
+    newest_article = (
+        select(func.max(Article.published_at))
+        .where(Article.cluster_id == Cluster.id)
+        .correlate(Cluster)
+        .scalar_subquery()
+    )
+    stmt = stmt.order_by(
+        newest_article.desc().nullslast(), Cluster.created_at.desc()
+    ).limit(limit)
     return list(db.scalars(stmt))
 
 
