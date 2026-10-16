@@ -40,9 +40,22 @@ async function request<T>(
   const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
   if (res.status === 204) return undefined as T;
   const text = await res.text();
-  const data = text ? JSON.parse(text) : null;
+  // La réponse n'est pas toujours du JSON (ex. erreur 500 en texte brut de uvicorn).
+  let data: unknown = null;
+  if (text) {
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = null;
+    }
+  }
   if (!res.ok) {
-    const detail = data?.detail || res.statusText;
+    const detail =
+      (data && typeof data === "object" && "detail" in data
+        ? String((data as { detail: unknown }).detail)
+        : "") ||
+      text?.slice(0, 200) ||
+      res.statusText;
     throw new ApiError(res.status, detail);
   }
   return data as T;
