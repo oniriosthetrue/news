@@ -22,6 +22,9 @@ export default function ThemesPage() {
   // Brouillon de fenêtre de recherche par thème (id -> heures en arrière).
   const [lookbackDrafts, setLookbackDrafts] = useState<Record<number, number>>({});
   const [savingId, setSavingId] = useState<number | null>(null);
+  // Thème dont le scan est en cours (null = aucun). Le scan tourne en
+  // arrière-plan côté serveur ; on affiche l'état jusqu'à ce qu'il ait fini.
+  const [scanningId, setScanningId] = useState<number | null>(null);
 
   useEffect(() => {
     if (!loading && !user) router.replace("/login");
@@ -51,8 +54,35 @@ export default function ThemesPage() {
   }
 
   async function scan(id: number) {
-    await api.scanTheme(id);
-    setTimeout(refresh, 1500);
+    if (scanningId != null) return;
+    setError(null);
+    setScanningId(id);
+    const startedAt =
+      themes.find((t) => t.id === id)?.last_scanned_at ?? null;
+    try {
+      await api.scanTheme(id);
+      // Le scan s'exécute en arrière-plan : on attend que last_scanned_at
+      // change (ou un délai max) pour rendre la main à l'utilisateur.
+      const deadline = Date.now() + 60000;
+      // eslint-disable-next-line no-constant-condition
+      while (Date.now() < deadline) {
+        await new Promise((r) => setTimeout(r, 2000));
+        let list: Theme[];
+        try {
+          list = await api.listThemes();
+        } catch {
+          continue;
+        }
+        setThemes(list);
+        const done = list.find((t) => t.id === id)?.last_scanned_at ?? null;
+        if (done && done !== startedAt) break;
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erreur pendant le scan");
+    } finally {
+      setScanningId(null);
+      refresh();
+    }
   }
 
   async function remove(id: number) {
@@ -248,9 +278,16 @@ export default function ThemesPage() {
               <div className="flex flex-shrink-0 gap-2 text-sm">
                 <button
                   onClick={() => scan(t.id)}
-                  className="rounded-md bg-sky-600 px-3 py-1 text-white hover:bg-sky-700"
+                  disabled={scanningId != null}
+                  className="inline-flex items-center gap-2 rounded-md bg-sky-600 px-3 py-1 text-white hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  Scanner
+                  {scanningId === t.id && (
+                    <span
+                      className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/40 border-t-white"
+                      aria-hidden
+                    />
+                  )}
+                  {scanningId === t.id ? "Scan en cours…" : "Scanner"}
                 </button>
                 <button
                   onClick={() => toggle(t)}
