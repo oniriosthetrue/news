@@ -20,7 +20,7 @@ async def usage(
 ) -> dict[str, Any]:
     """Etat des sources de recherche + solde de credits Serper."""
     settings = get_settings()
-    order = [name for name, _ in search._FALLBACKS]
+    order = [name for name, _ in search._SOURCES]
     out: dict[str, Any] = {
         "searxng_enabled": settings.searxng_enabled,
         "fallback_order": order,
