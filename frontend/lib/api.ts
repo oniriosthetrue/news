@@ -1,5 +1,5 @@
 // Client API minimal (fetch) + gestion du jeton en localStorage.
-import type { Cluster, Theme, Token, User } from "./types";
+import type { Cluster, Theme, Token, Usage, User } from "./types";
 
 export const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "/api";
 
@@ -102,4 +102,7 @@ export const api = {
   // --- News ---
   feed: (themeId?: number) =>
     request<Cluster[]>(themeId ? `/news?theme_id=${themeId}` : "/news"),
+
+  // --- Usage (credits sources de recherche) ---
+  usage: () => request<Usage>("/usage"),
 };

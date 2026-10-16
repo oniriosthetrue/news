@@ -2,6 +2,7 @@
 
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth";
+import UsageBadge from "./UsageBadge";
 
 export default function Navbar() {
   const { user, logout } = useAuth();
@@ -42,6 +43,7 @@ export default function Navbar() {
         </div>
         {user && (
           <div className="flex items-center gap-3 text-sm">
+            <UsageBadge />
             <span className="text-neutral-500">{user.display_name}</span>
             <button
               onClick={() => {

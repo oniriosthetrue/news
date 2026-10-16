@@ -33,3 +33,10 @@ export type Cluster = {
   updated_at: string;
   articles: Article[];
 };
+
+export type Usage = {
+  searxng_enabled: boolean;
+  fallback_order: string[];
+  enabled: { serper: boolean; newsapi: boolean; gnews: boolean };
+  serper: { balance: number; rateLimit?: number } | null;
+};
