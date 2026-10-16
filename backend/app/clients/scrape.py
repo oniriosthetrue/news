@@ -19,6 +19,33 @@ _UA = (
     "(KHTML, like Gecko) Chrome/124.0 Safari/537.36"
 )
 
+# Motifs d'URL qui designent un portail / formulaire / appli, pas un article.
+_NON_ARTICLE_URL = (
+    "/search", "searchby", "publicsearch", "/ui/", "/query", "/lookup",
+    "/login", "/signin", "/signup", "/register", "/account", "/cart",
+    "/checkout", "/subscribe", "/newsletter", "/contact", "/about",
+    "/privacy", "/legal", "/terms", "/sitemap", "/tag/", "/category/",
+    "/author/", "?page=", "wp-login", "wp-admin",
+)
+
+# Mots de formulaire/navigation : si le contenu en est sature, ce n'est pas un article.
+_BOILERPLATE_WORDS = (
+    "search", "submit", "filter", "advanced search", "query", "clear",
+    "rechercher", "envoyer", "filtre", "connexion", "mot de passe",
+    "sign in", "log in", "copyright", "all rights reserved", "cookie",
+    "javascript", "enable javascript", "browser",
+)
+
+
+def _looks_like_article(content: str) -> bool:
+    """Faux si le texte est un formulaire/portail plutot qu'un article."""
+    text = content.lower()
+    hits = sum(1 for w in _BOILERPLATE_WORDS if w in text)
+    # Beaucoup de mots de formulaire pour peu de texte -> page utilitaire.
+    if hits >= 3 and len(content) < 1500:
+        return False
+    return True
+
 
 @dataclass
 class ScrapedArticle:
@@ -28,12 +55,19 @@ class ScrapedArticle:
     published_at: Optional[str]
 
 
+def _is_article_url(url: str) -> bool:
+    lowered = url.lower()
+    return not any(token in lowered for token in _NON_ARTICLE_URL)
+
+
 def _extract(html: str, url: str) -> Optional[ScrapedArticle]:
     meta = trafilatura.extract_metadata(html, default_url=url)
     content = trafilatura.extract(
         html, url=url, include_comments=False, favor_recall=True
     )
     if not content or len(content) < 120:
+        return None
+    if not _looks_like_article(content):
         return None
     return ScrapedArticle(
         title=(meta.title if meta else "") or "",
@@ -45,6 +79,9 @@ def _extract(html: str, url: str) -> Optional[ScrapedArticle]:
 
 async def scrape(client: httpx.AsyncClient, url: str) -> Optional[ScrapedArticle]:
     """Récupère et extrait le contenu lisible. Retourne None si échec/contenu trop court."""
+    if not _is_article_url(url):
+        logger.debug("URL non-article ignorée: %s", url)
+        return None
     try:
         resp = await client.get(
             url,
