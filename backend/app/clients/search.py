@@ -19,7 +19,8 @@ logger = logging.getLogger(__name__)
 settings = get_settings()
 
 # Replis ordonnés : (nom, module). Appelés si SearXNG désactivé ou revient vide.
-_FALLBACKS = (("NewsAPI", newsapi), ("GNews", gnews), ("Serper", serper))
+# Serper (API Google) en premier : le plus riche/frais, puis NewsAPI, puis GNews.
+_FALLBACKS = (("Serper", serper), ("NewsAPI", newsapi), ("GNews", gnews))
 
 
 async def search(
