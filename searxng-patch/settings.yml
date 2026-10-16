@@ -76,24 +76,24 @@ engines:
     disabled: false
   - name: startpage
     disabled: false
-  - name: mojeek
-    disabled: false
   - name: marginalia
-    disabled: false
-  - name: yahoo
     disabled: false
   # --- Actifs (news : utiles a l'agregateur d'actus) ---
   - name: bing news
     disabled: false
   - name: startpage news
     disabled: false
-  - name: mojeek news
-    disabled: false
   - name: yahoo news
     disabled: false
+  # --- Desactifs (CAPTCHA / access denied / parsing / suspension depuis ce boitier) ---
+  - name: mojeek
+    disabled: true
+  - name: mojeek news
+    disabled: true
+  - name: yahoo
+    disabled: true
   - name: google news
-    disabled: false
-  # --- Desactifs (CAPTCHA / access denied / suspension IP depuis ce boitier) ---
+    disabled: true
   - name: google
     disabled: true
   - name: google cse
