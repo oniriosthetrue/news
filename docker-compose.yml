@@ -66,6 +66,7 @@ services:
       MAX_QUERIES_PER_THEME: "8"
       MAX_RESULTS_PER_QUERY: "25"
       MAX_ARTICLES_PER_SCAN: "120"
+      MAX_CLUSTERS_PER_SCAN: "40"
       LLM_CONCURRENCY: "2"
       LOG_LEVEL: INFO
     networks: [mynetwork]

@@ -52,6 +52,9 @@ class Settings(BaseSettings):
     max_queries_per_theme: int = 8
     max_results_per_query: int = 25
     max_articles_per_scan: int = 120
+    # Nombre max de clusters (sujets regroupe) retenus par scan = nb d'appels
+    # LLM de resume. Regle independamment du nb de requetes.
+    max_clusters_per_scan: int = 40
     llm_concurrency: int = 2
     http_timeout: float = 30.0
     scrape_timeout: float = 20.0

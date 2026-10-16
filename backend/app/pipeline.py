@@ -258,8 +258,9 @@ async def scan_theme(db: Session, theme_id: int) -> dict:
         scraped = in_window
 
         groups = _group_by_similarity(scraped)
-        # Limite le nombre de clusters (donc d'appels LLM de résumé) par scan.
-        groups = sorted(groups, key=len, reverse=True)[: settings.max_queries_per_theme]
+        # Limite le nombre de clusters (donc d'appels LLM de resume) par scan.
+        # On garde les plus gros groupes (le plus de sources = sujet le plus couvert).
+        groups = sorted(groups, key=len, reverse=True)[: settings.max_clusters_per_scan]
 
         clusters = 0
         for group in groups:
