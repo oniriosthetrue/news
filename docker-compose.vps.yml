@@ -58,6 +58,9 @@ services:
       # (routage Traefik). Vide -> retombe sur le dernier état poussé.
       ENGINE_PROBE_URL: ${ENGINE_PROBE_URL:-http://100.73.55.66/api/sync/engine-status}
       ENGINE_PROBE_HOST: ${ENGINE_PROBE_HOST:-news.minervia.fr}
+      # Relais des écritures thème (créer/scaner) vers le boîtier, qui exécute
+      # et repousse -> le nouveau thème + ses articles apparaissent au fil.
+      ENGINE_COMMAND_URL: ${ENGINE_COMMAND_URL:-http://100.73.55.66/api/sync/theme-command}
     networks: [newsnet]
     # Caddy (systemd) sur le VPS reverse-proxy vers ces ports localhost.
     ports:

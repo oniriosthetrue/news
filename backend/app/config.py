@@ -71,6 +71,12 @@ class Settings(BaseSettings):
     engine_probe_url: str = ""  # ex. http://100.73.55.66/api/sync/engine-status
     engine_probe_host: str = ""  # ex. news.minervia.fr
     engine_probe_timeout: float = 5.0
+    # --- Relais des écritures thème (VPS -> boîtier) ---
+    # Le miroir est en lecture seule : créer/scaner un thème sur le site public
+    # doit être EXÉCUTÉ par le boîtier (seul à pouvoir scanner), qui repousse
+    # ensuite le résultat. Côté VPS uniquement. Vide -> écritures thème locales
+    # (désactivées en pratique car le miroir ne scanne pas).
+    engine_command_url: str = ""  # ex. http://100.73.55.66/api/sync/theme-command
 
     # --- Pipeline ---
     scan_default_interval_hours: int = 6

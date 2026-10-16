@@ -192,6 +192,58 @@ async def probe_engine_status(client: httpx.AsyncClient) -> Optional[dict[str, A
 
 
 # --------------------------------------------------------------------------- #
+# Relais des écritures thème (côté VPS miroir) — VPS -> boîtier
+# --------------------------------------------------------------------------- #
+async def send_theme_command(
+    client: httpx.AsyncClient, command: dict[str, Any]
+) -> dict[str, Any]:
+    """Relaye une écriture thème vers le boîtier, qui l'exécute et repousse.
+
+    Utilisé par le miroir (lecture seule) : créer/scaner/modifier/supprimer un
+    thème sur le site public est délégué au boîtier (seul à pouvoir scanner).
+    Lève HTTPException(502) si le boîtier est injoignable ou refuse.
+    """
+    from fastapi import HTTPException
+
+    if not settings.engine_command_url or not settings.sync_shared_secret:
+        raise HTTPException(
+            status_code=503,
+            detail="Miroir non configuré pour déléguer au boîtier",
+        )
+    body = json.dumps(command, ensure_ascii=False).encode("utf-8")
+    signature = sign(settings.sync_shared_secret, body)
+    headers = {
+        "Content-Type": "application/json",
+        "X-Signature": signature,
+    }
+    if settings.engine_probe_host:
+        headers["Host"] = settings.engine_probe_host
+    try:
+        resp = await client.post(
+            settings.engine_command_url,
+            content=body,
+            headers=headers,
+            timeout=settings.sync_timeout,
+        )
+    except httpx.HTTPError as exc:
+        logger.warning("Relais thème -> boîtier injoignable: %s", exc)
+        raise HTTPException(
+            status_code=502, detail="Boîtier injoignable (création impossible)"
+        )
+    if resp.status_code >= 400:
+        logger.warning(
+            "Relais thème -> boîtier %s: %s", resp.status_code, resp.text[:200]
+        )
+        raise HTTPException(
+            status_code=502, detail=f"Refus du boîtier : {resp.text[:200]}"
+        )
+    try:
+        return resp.json()
+    except ValueError:
+        return {"status": "ok"}
+
+
+# --------------------------------------------------------------------------- #
 # Import (côté VPS miroir) — remplace tout le contenu par l'instantané
 # --------------------------------------------------------------------------- #
 def _parse_dt(value: Optional[str]) -> Optional[dt.datetime]:
