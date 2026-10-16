@@ -18,7 +18,7 @@ services:
   db:
     image: postgres:16-alpine
     container_name: news-db
-    restart: unless-stopped
+    restart: always
     environment:
       POSTGRES_USER: news
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
@@ -35,7 +35,7 @@ services:
   api:
     build: ./backend
     container_name: news-api
-    restart: unless-stopped
+    restart: always
     depends_on:
       db: { condition: service_healthy }
     environment:
@@ -64,7 +64,7 @@ services:
       args:
         NEXT_PUBLIC_API_BASE: ${NEXT_PUBLIC_API_BASE:-/api}
     container_name: news-web
-    restart: unless-stopped
+    restart: always
     depends_on: [api]
     networks: [newsnet]
     ports:
