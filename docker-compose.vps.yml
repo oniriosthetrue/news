@@ -54,12 +54,9 @@ services:
       SYNC_SHARED_SECRET: ${SYNC_SHARED_SECRET:?set SYNC_SHARED_SECRET (same as boitier)}
       SYNC_ENABLED: "false"  # le miroir ne pousse pas, il reçoit
     networks: [newsnet]
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.news-api.rule=Host(`news.minervia.fr`) && PathPrefix(`/api`)"
-      - "traefik.http.routers.news-api.entrypoints=web"
-      - "traefik.http.routers.news-api.priority=20"
-      - "traefik.http.services.news-api.loadbalancer.server.port=8000"
+    # Caddy (systemd) sur le VPS reverse-proxy vers ces ports localhost.
+    ports:
+      - "127.0.0.1:8000:8000"
 
   web:
     build:
@@ -70,12 +67,8 @@ services:
     restart: unless-stopped
     depends_on: [api]
     networks: [newsnet]
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.news-web.rule=Host(`news.minervia.fr`)"
-      - "traefik.http.routers.news-web.entrypoints=web"
-      - "traefik.http.routers.news-web.priority=10"
-      - "traefik.http.services.news-web.loadbalancer.server.port=3000"
+    ports:
+      - "127.0.0.1:3000:3000"
 
 networks:
   # Réseau LOCAL au VPS (pas de partage avec une stack qwen ici).
