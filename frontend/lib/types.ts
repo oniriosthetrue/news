@@ -39,4 +39,6 @@ export type Usage = {
   fallback_order: string[];
   enabled: { serper: boolean; newsapi: boolean; gnews: boolean };
   serper: { balance: number; rateLimit?: number } | null;
+  mirror_mode: boolean;
+  llm_online: boolean;
 };

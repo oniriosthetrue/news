@@ -6,7 +6,7 @@ from typing import Any
 import httpx
 from fastapi import APIRouter, Depends
 
-from ..clients import gnews, newsapi, search, serper
+from ..clients import gnews, llm, newsapi, search, serper
 from ..config import get_settings
 from ..deps import get_current_user
 from ..models import User
@@ -30,8 +30,12 @@ async def usage(
             "gnews": gnews.enabled(),
         },
         "serper": None,
+        # Indicateur « LLM on/off » : la passerelle LiteLLM est-elle joignable ?
+        "mirror_mode": settings.mirror_mode,
+        "llm_online": False,
     }
-    if serper.enabled():
-        async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient() as client:
+        out["llm_online"] = await llm.online(client)
+        if serper.enabled():
             out["serper"] = await serper.get_balance(client)
     return out

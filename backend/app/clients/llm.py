@@ -23,6 +23,24 @@ class LLMError(RuntimeError):
     pass
 
 
+async def online(client: httpx.AsyncClient) -> bool:
+    """Le LLM (LiteLLM) est-il joignable ? Vrai si /models répond 200.
+
+    Utilisé par l'indicateur « LLM on/off » de l'UI. Court timeout : on ne veut
+    pas bloquer l'affichage de la page si la passerelle est éteinte (ex. miroir
+    VPS sans LiteLLM, ou boîtier hors ligne).
+    """
+    try:
+        resp = await client.get(
+            f"{settings.litellm_base_url}/models",
+            headers={"Authorization": f"Bearer {settings.litellm_api_key}"},
+            timeout=4.0,
+        )
+    except httpx.HTTPError:
+        return False
+    return resp.status_code == 200
+
+
 async def _chat(
     client: httpx.AsyncClient,
     messages: list[dict[str, str]],
