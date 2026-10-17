@@ -7,6 +7,22 @@ import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import type { Theme, Usage } from "@/lib/types";
 
+// Heure du dernier scan, en heure de Paris (ex. « 17 oct. à 14:23 »).
+function lastScanParis(iso: string): string {
+  const d = new Date(iso);
+  const sameYear =
+    d.toLocaleDateString("fr-FR", { timeZone: "Europe/Paris" }) ===
+    new Date().toLocaleDateString("fr-FR", { timeZone: "Europe/Paris" });
+  return d.toLocaleString("fr-FR", {
+    timeZone: "Europe/Paris",
+    day: "numeric",
+    month: "short",
+    ...(sameYear ? {} : { year: "numeric" }),
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 export default function ThemesPage() {
   const { user, loading } = useAuth();
   const router = useRouter();
@@ -274,15 +290,18 @@ export default function ThemesPage() {
                       en attente du LLM
                     </span>
                   )}
+                  {t.last_scanned_at && (
+                    <span
+                      className="rounded bg-sky-100 px-1.5 py-0.5 text-xs text-sky-700 dark:bg-sky-900/40 dark:text-sky-300"
+                      title={`Dernier scan : ${lastScanParis(t.last_scanned_at)} (heure de Paris)`}
+                    >
+                      🕒 {lastScanParis(t.last_scanned_at)}
+                    </span>
+                  )}
                 </div>
                 {t.description && (
                   <p className="truncate text-sm text-neutral-500">{t.description}</p>
                 )}
-                <p className="mt-1 text-xs text-neutral-400">
-                  {t.last_scanned_at
-                    ? `scan ${new Date(t.last_scanned_at).toLocaleString("fr-FR")}`
-                    : "jamais scanné"}
-                </p>
                 <div className="mt-2 flex items-center gap-2 text-xs text-neutral-500">
                   <label>Actualisation toutes</label>
                   <input
