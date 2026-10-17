@@ -8,6 +8,17 @@ import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import type { Cluster, Theme } from "@/lib/types";
 
+// Heure de dernière mise à jour (dernier scan), en heure de Paris.
+function lastUpdateParis(iso: string): string {
+  return new Date(iso).toLocaleString("fr-FR", {
+    timeZone: "Europe/Paris",
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 export default function FeedPage() {
   const { user, loading } = useAuth();
   const router = useRouter();
@@ -38,10 +49,28 @@ export default function FeedPage() {
 
   if (loading) return null;
 
+  // Dernière mise à jour = dernier scan le plus récent parmi les thèmes
+  // concernés (thème sélectionné, ou tous les thèmes si « Tous »).
+  const scope = activeTheme == null ? themes : themes.filter((t) => t.id === activeTheme);
+  const lastScan = scope
+    .map((t) => t.last_scanned_at)
+    .filter((d): d is string => Boolean(d))
+    .sort()
+    .at(-1);
+
   return (
     <>
       <Navbar />
       <main className="mx-auto max-w-3xl px-4 py-6">
+        {lastScan && (
+          <p className="mb-3 text-xs text-neutral-500">
+            Dernière mise à jour :{" "}
+            <span className="font-medium text-neutral-700 dark:text-neutral-300">
+              {lastUpdateParis(lastScan)}
+            </span>{" "}
+            (heure de Paris)
+          </p>
+        )}
         <div className="mb-4 flex flex-wrap gap-2">
           <button
             onClick={() => setActiveTheme(undefined)}
